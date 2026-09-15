@@ -1235,9 +1235,9 @@ class CosyVoice3Vocoder(BatchVocoderBase):
         self, items: list[tuple[FunCosyVoice3State, torch.Tensor]]
     ) -> list[tuple[Any, int]]:
         prepared = [self._prepare_item(state, codes) for state, codes in items]
-        return await self.decode_prepared_batch(prepared)
+        return await self._decode_prepared_batch(prepared)
 
-    async def decode_prepared_batch(
+    async def _decode_prepared_batch(
         self, requests: list[PreparedVocoderRequest]
     ) -> list[tuple[Any, int]]:
         prepared = [
