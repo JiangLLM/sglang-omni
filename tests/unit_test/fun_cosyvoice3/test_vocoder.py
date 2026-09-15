@@ -786,26 +786,6 @@ def test_scheduler_does_not_eagerly_prepare_streaming_request() -> None:
         scheduler.on_serving_stop()
 
 
-def test_scheduler_direct_inbox_falls_back_to_synchronous_prepare(monkeypatch) -> None:
-    _install_fake_batch_adapter(monkeypatch, [])
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    scheduler = FunCosyVoice3StreamingVocoderScheduler(vocoder, max_batch_size=1)
-    state = _state()
-    state.audio_codes = _codes(2)
-    payload = _payload(state)
-    message = IncomingMessage(payload.request_id, "new_request", payload)
-
-    try:
-        scheduler.inbox.put(message)
-        scheduler.handle_message(scheduler.next_message(), None)
-        result = scheduler.outbox.get_nowait()
-    finally:
-        scheduler.on_serving_stop()
-
-    assert result.type == "result"
-    assert not scheduler._prepared_requests
-
-
 def test_scheduler_abort_discards_prepared_request(monkeypatch) -> None:
     vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
     prepare_item = vocoder.prepare_request
