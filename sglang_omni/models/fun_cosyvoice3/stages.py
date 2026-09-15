@@ -137,6 +137,27 @@ class PreparedVocoderRequest:
     flow_input: FlowBatchInput
     total_mel_frames: int
 
+    def as_flow_request(self, index: int) -> PreparedFlowRequest:
+        return PreparedFlowRequest(
+            index=index,
+            sample_rate=self.state.sample_rate,
+            flow_input=self.flow_input,
+            total_mel_frames=self.total_mel_frames,
+        )
+
+
+def _assert_cpu_flow_input(flow_input: FlowBatchInput) -> None:
+    tensors = (
+        ("token", flow_input.token),
+        ("prompt_token", flow_input.prompt_token),
+        ("prompt_feat", flow_input.prompt_feat),
+        ("embedding", flow_input.embedding),
+    )
+    for name, tensor in tensors:
+        assert (
+            tensor.device.type == "cpu"
+        ), f"prepared Fun-CosyVoice3 {name} must stay on CPU, got {tensor.device}"
+
 
 @dataclass(frozen=True)
 class PackedFlowBatch:
@@ -1390,42 +1411,36 @@ class CosyVoice3Vocoder(BatchVocoderBase):
 
     def prepare_request(self, payload: StagePayload) -> PreparedVocoderRequest:
         state, codes = self.prepare_item(payload)
-        return self._prepare_item(state, codes)
+        return self._prepare_from_codes(state, codes)
 
-    def _prepare_item(
+    def _prepare_from_codes(
         self, state: FunCosyVoice3State, codes: torch.Tensor
     ) -> PreparedVocoderRequest:
         flow_input = self.make_flow_input(state, codes)
-        total_mel_frames = (
-            flow_input.prompt_token.shape[1] + flow_input.token.shape[1]
-        ) * self.flow.token_mel_ratio
+        _assert_cpu_flow_input(flow_input)
+        token_frames = flow_input.prompt_token.shape[1] + flow_input.token.shape[1]
         return PreparedVocoderRequest(
             state=state,
             flow_input=flow_input,
-            total_mel_frames=total_mel_frames,
+            total_mel_frames=token_frames * self.flow.token_mel_ratio,
         )
 
     async def decode_batch(
         self, items: list[tuple[FunCosyVoice3State, torch.Tensor]]
     ) -> list[tuple[Any, int]]:
-        prepared = [self._prepare_item(state, codes) for state, codes in items]
-        return await self._decode_prepared_batch(prepared)
+        return await self.decode_prepared_batch(
+            [self._prepare_from_codes(state, codes) for state, codes in items]
+        )
 
-    async def _decode_prepared_batch(
+    async def decode_prepared_batch(
         self, requests: list[PreparedVocoderRequest]
     ) -> list[tuple[Any, int]]:
-        prepared = [
-            PreparedFlowRequest(
-                index=index,
-                sample_rate=request.state.sample_rate,
-                flow_input=request.flow_input,
-                total_mel_frames=request.total_mel_frames,
-            )
-            for index, request in enumerate(requests)
+        flow_requests = [
+            request.as_flow_request(index) for index, request in enumerate(requests)
         ]
         results: list[tuple[Any, int] | None] = [None] * len(requests)
         flow_groups = adaptive_flow_requests_grouping(
-            prepared,
+            flow_requests,
             flow_merge_max_gap_frames=self.flow_merge_max_gap_frames,
             flow_merge_pad_budget_percent=self.flow_merge_pad_budget_percent,
         )
