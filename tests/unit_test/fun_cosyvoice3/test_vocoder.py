@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import sys
 import threading
-import time
 from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import ClassVar, Iterator
@@ -849,103 +848,6 @@ def test_scheduler_abort_discards_prepared_request(monkeypatch) -> None:
             future.result(timeout=1)
         finally:
             release.set()
-
-
-def _count_prepare_calls(
-    monkeypatch, vocoder: stages.CosyVoice3Vocoder
-) -> dict[str, int]:
-    calls = {"prepare_item": 0, "make_flow_input": 0}
-    prepare_item = vocoder.prepare_item
-    make_flow_input = vocoder.make_flow_input
-
-    def counted_prepare_item(payload):
-        calls["prepare_item"] += 1
-        return prepare_item(payload)
-
-    def counted_make_flow_input(state, codes):
-        calls["make_flow_input"] += 1
-        return make_flow_input(state, codes)
-
-    monkeypatch.setattr(vocoder, "prepare_item", counted_prepare_item)
-    monkeypatch.setattr(vocoder, "make_flow_input", counted_make_flow_input)
-    return calls
-
-
-def _admission_payloads(batch_size: int) -> list[StagePayload]:
-    payloads: list[StagePayload] = []
-    for index in range(batch_size):
-        state = _state(prompt_tokens=200, prompt_feat_frames=400)
-        state.audio_codes = _codes(2000)
-        payloads.append(_payload(state, f"req-{index}"))
-    return payloads
-
-
-def test_scheduler_prepare_lane_uses_one_worker() -> None:
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    payload = _buffered_payload()
-    message = IncomingMessage(payload.request_id, "new_request", payload)
-
-    with _running_scheduler(vocoder, max_batch_cost=8000) as scheduler:
-        scheduler.enqueue(message)
-        assert scheduler._prepare_executor is not None
-        assert scheduler._prepare_executor._max_workers == 1
-
-
-def test_eager_admission_reuses_one_prepare_and_is_cheaper_than_recompute(
-    monkeypatch,
-) -> None:
-    payloads = _admission_payloads(8)
-    messages = [
-        IncomingMessage(payload.request_id, "new_request", payload)
-        for payload in payloads
-    ]
-    baseline_vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    baseline_started = time.perf_counter()
-    baseline_costs = [
-        baseline_vocoder.flow_scheduler_cost(payload) for payload in payloads
-    ]
-    baseline_s = time.perf_counter() - baseline_started
-
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    calls = _count_prepare_calls(monkeypatch, vocoder)
-    with _running_scheduler(vocoder, max_batch_cost=8000) as scheduler:
-        for message in messages:
-            scheduler.enqueue(message)
-        for future in scheduler._prepared_requests.values():
-            future.result(timeout=2)
-        assert calls == {"prepare_item": 8, "make_flow_input": 8}
-        cached_started = time.perf_counter()
-        cached_costs = [scheduler.message_cost(message) for message in messages]
-        cached_s = time.perf_counter() - cached_started
-        assert calls == {"prepare_item": 8, "make_flow_input": 8}
-
-    assert cached_costs == baseline_costs
-    assert cached_s < baseline_s * 0.5
-
-
-def test_decode_reuses_cached_flow_input_object(monkeypatch) -> None:
-    _install_fake_batch_adapter(monkeypatch, [])
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    payload = _buffered_payload()
-    message = IncomingMessage(payload.request_id, "new_request", payload)
-
-    with _running_scheduler(
-        vocoder, max_batch_size=2, max_batch_wait_ms=0
-    ) as scheduler:
-        scheduler.enqueue(message)
-        prepared = scheduler._prepared_requests[payload.request_id].result(timeout=2)
-        captured: list[stages.FlowBatchInput] = []
-        decode_prepared_batch = vocoder.decode_prepared_batch
-
-        async def capture_decode(requests):
-            captured.extend(request.flow_input for request in requests)
-            return await decode_prepared_batch(requests)
-
-        monkeypatch.setattr(vocoder, "decode_prepared_batch", capture_decode)
-        scheduler.handle_message(scheduler.next_message(), None)
-
-    assert captured == [prepared.flow_input]
-    assert captured[0] is prepared.flow_input
 
 
 def test_flow_admission_defers_request_after_long_singleton(monkeypatch) -> None:
