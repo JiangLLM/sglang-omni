@@ -834,11 +834,17 @@ def test_flow_admission_defers_request_after_long_singleton(monkeypatch) -> None
     short_state.audio_codes = _codes(2)
     first = IncomingMessage("long", "new_request", _payload(long_state))
     second = IncomingMessage("short", "new_request", _payload(short_state))
-    scheduler.inbox.put(second)
+    try:
+        scheduler.enqueue(first)
+        scheduler.enqueue(second)
+        first_msg = scheduler.next_message()
 
-    assert scheduler.max_batch_cost == 2000
-    assert scheduler.collect_new_request_batch(first) == [first]
-    assert scheduler.next_message() == second
+        assert scheduler.max_batch_cost == 2000
+        assert first_msg is first
+        assert scheduler.collect_new_request_batch(first_msg) == [first]
+        assert scheduler.next_message() == second
+    finally:
+        scheduler.on_serving_stop()
 
 
 def test_create_vocoder_executor_defaults_batch_for_real_lengths(monkeypatch) -> None:
@@ -902,22 +908,28 @@ def test_create_vocoder_executor_threads_batch_configuration(monkeypatch) -> Non
         flow_merge_pad_budget_percent=0,
     )
 
-    assert isinstance(scheduler, FunCosyVoice3StreamingVocoderScheduler)
-    assert scheduler.max_batch_size == 6
-    assert scheduler.max_batch_wait_s == pytest.approx(0.007)
-    assert scheduler.max_batch_cost == 200
-    assert callable(scheduler.request_cost_fn)
-    assert scheduler.vocoder.flow_merge_max_gap_frames == 0
-    assert scheduler.vocoder.flow_merge_pad_budget_percent == 0
-    state = _state(prompt_tokens=1)
-    state.audio_codes = _codes(2)
-    assert scheduler.request_cost_fn(_payload(state)) == 6
-    assert captured == {
-        "checkpoint_dir": "/checkpoint",
-        "device": "cpu",
-        "fp16": True,
-        "enable_flow_estimator_trt": False,
-    }
+    try:
+        assert isinstance(scheduler, FunCosyVoice3StreamingVocoderScheduler)
+        assert scheduler.max_batch_size == 6
+        assert scheduler.max_batch_wait_s == pytest.approx(0.007)
+        assert scheduler.max_batch_cost == 200
+        assert callable(scheduler.request_cost_fn)
+        assert scheduler.vocoder.flow_merge_max_gap_frames == 0
+        assert scheduler.vocoder.flow_merge_pad_budget_percent == 0
+        state = _state(prompt_tokens=1)
+        state.audio_codes = _codes(2)
+        payload = _payload(state)
+        message = IncomingMessage(payload.request_id, "new_request", payload)
+        scheduler.enqueue(message)
+        assert scheduler.message_cost(message) == 6
+        assert captured == {
+            "checkpoint_dir": "/checkpoint",
+            "device": "cpu",
+            "fp16": True,
+            "enable_flow_estimator_trt": False,
+        }
+    finally:
+        scheduler.on_serving_stop()
 
 
 def test_create_vocoder_executor_threads_trt_flag(monkeypatch) -> None:
