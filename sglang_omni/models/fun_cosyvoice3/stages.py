@@ -146,19 +146,6 @@ class PreparedVocoderRequest:
         )
 
 
-def _assert_cpu_flow_input(flow_input: FlowBatchInput) -> None:
-    tensors = (
-        ("token", flow_input.token),
-        ("prompt_token", flow_input.prompt_token),
-        ("prompt_feat", flow_input.prompt_feat),
-        ("embedding", flow_input.embedding),
-    )
-    for name, tensor in tensors:
-        assert (
-            tensor.device.type == "cpu"
-        ), f"prepared Fun-CosyVoice3 {name} must stay on CPU, got {tensor.device}"
-
-
 @dataclass(frozen=True)
 class PackedFlowBatch:
     token: torch.Tensor
@@ -1417,7 +1404,6 @@ class CosyVoice3Vocoder(BatchVocoderBase):
         self, state: FunCosyVoice3State, codes: torch.Tensor
     ) -> PreparedVocoderRequest:
         flow_input = self.make_flow_input(state, codes)
-        _assert_cpu_flow_input(flow_input)
         token_frames = flow_input.prompt_token.shape[1] + flow_input.token.shape[1]
         return PreparedVocoderRequest(
             state=state,
