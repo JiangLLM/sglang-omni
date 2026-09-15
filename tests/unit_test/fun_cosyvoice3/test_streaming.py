@@ -839,7 +839,7 @@ def test_backlogged_chunks_stay_ordered_before_stream_done(
 
 @pytest.mark.parametrize("streaming", [False, True])
 def test_new_request_collection_stops_at_pending_chunk(streaming: bool) -> None:
-    _, scheduler = _scheduler(max_batch_size=8, request_cost_fn=lambda payload: 1)
+    _, scheduler = _scheduler(max_batch_size=8)
     payload = _stream_payload("req-a")
     payload.request.params["stream"] = streaming
     first = IncomingMessage(request_id="req-a", type="new_request", data=payload)

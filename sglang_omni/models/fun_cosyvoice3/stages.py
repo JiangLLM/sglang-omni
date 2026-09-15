@@ -9,14 +9,16 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from cosyvoice.flow.flow import CausalMaskedDiffWithDiT
-from cosyvoice.flow.flow_matching import ConditionalCFM
 from torch.nn.utils.parametrize import is_parametrized, remove_parametrizations
+
+if TYPE_CHECKING:
+    from cosyvoice.flow.flow import CausalMaskedDiffWithDiT
+    from cosyvoice.flow.flow_matching import ConditionalCFM
 
 from sglang_omni.models.fun_cosyvoice3.config import reject_conflicting_dit_accelerators
 from sglang_omni.models.fun_cosyvoice3.flow_estimator_trt import (
@@ -1329,13 +1331,6 @@ def adaptive_flow_requests_grouping(
     raise AssertionError("valid Flow requests must have a feasible partition")
 
 
-@dataclass(frozen=True)
-class PreparedVocoderRequest:
-    state: FunCosyVoice3State
-    flow_input: FlowBatchInput
-    total_mel_frames: int
-
-
 class CosyVoice3Vocoder(BatchVocoderBase):
     def __init__(
         self,
@@ -1386,47 +1381,27 @@ class CosyVoice3Vocoder(BatchVocoderBase):
         codes = torch.as_tensor(state.audio_codes, dtype=torch.long).reshape(-1)
         return state, codes
 
-    def prepare_request(self, payload: StagePayload) -> PreparedVocoderRequest:
-        state, codes = self.prepare_item(payload)
-        flow_input = self.make_flow_input(state, codes)
-        token_frames = flow_input.prompt_token.shape[1] + flow_input.token.shape[1]
-        return PreparedVocoderRequest(
-            state=state,
-            flow_input=flow_input,
-            total_mel_frames=token_frames * self.flow.token_mel_ratio,
-        )
-
     async def decode_batch(
         self, items: list[tuple[FunCosyVoice3State, torch.Tensor]]
     ) -> list[tuple[Any, int]]:
-        requests = []
-        for state, codes in items:
+        prepared: list[PreparedFlowRequest] = []
+        for index, (state, codes) in enumerate(items):
             flow_input = self.make_flow_input(state, codes)
-            token_frames = flow_input.prompt_token.shape[1] + flow_input.token.shape[1]
-            requests.append(
-                PreparedVocoderRequest(
-                    state=state,
+            prepared.append(
+                PreparedFlowRequest(
+                    index=index,
+                    sample_rate=state.sample_rate,
                     flow_input=flow_input,
-                    total_mel_frames=token_frames * self.flow.token_mel_ratio,
+                    total_mel_frames=(
+                        flow_input.prompt_token.shape[1] + flow_input.token.shape[1]
+                    )
+                    * self.flow.token_mel_ratio,
                 )
             )
-        return await self.decode_prepared_batch(requests)
 
-    async def decode_prepared_batch(
-        self, requests: list[PreparedVocoderRequest]
-    ) -> list[tuple[Any, int]]:
-        flow_requests = [
-            PreparedFlowRequest(
-                index=index,
-                sample_rate=request.state.sample_rate,
-                flow_input=request.flow_input,
-                total_mel_frames=request.total_mel_frames,
-            )
-            for index, request in enumerate(requests)
-        ]
-        results: list[tuple[Any, int] | None] = [None] * len(requests)
+        results: list[tuple[Any, int] | None] = [None] * len(items)
         flow_groups = adaptive_flow_requests_grouping(
-            flow_requests,
+            prepared,
             flow_merge_max_gap_frames=self.flow_merge_max_gap_frames,
             flow_merge_pad_budget_percent=self.flow_merge_pad_budget_percent,
         )
@@ -2014,7 +1989,6 @@ def create_vocoder_executor(
     token_hop_len: int = TOKEN_HOP_LEN,
     token_max_hop_len: int = TOKEN_MAX_HOP_LEN,
     disable_hop_growth: bool = False,
-    prepare_workers: int | None = None,
     mlx_model_path: str | None = None,
     mlx_model_revision: str | None = None,
 ) -> Any:
@@ -2118,11 +2092,11 @@ def create_vocoder_executor(
         vocoder,
         max_batch_size=max_batch_size,
         max_batch_wait_ms=max_batch_wait_ms,
+        request_cost_fn=vocoder.flow_scheduler_cost,
         max_batch_cost=flow_batch_admission_frames,
         token_hop_len=token_hop_len,
         token_max_hop_len=token_max_hop_len,
         disable_hop_growth=disable_hop_growth,
-        prepare_workers=prepare_workers,
     )
     scheduler.warmup_now()
     return scheduler

@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import sys
-import threading
-from contextlib import contextmanager
 from types import SimpleNamespace
-from typing import ClassVar, Iterator
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -228,11 +226,9 @@ class _FakeFlow(torch.nn.Module):
         return torch.ones(1, 80, token_count * 2), None
 
 
-def _payload(
-    state: FunCosyVoice3State, request_id: str = "req-vocoder"
-) -> StagePayload:
+def _payload(state: FunCosyVoice3State) -> StagePayload:
     return StagePayload(
-        request_id=request_id,
+        request_id="req-vocoder",
         request=OmniRequest(inputs="hello"),
         data=state.to_dict(),
     )
@@ -725,152 +721,6 @@ def test_flow_scheduler_cost_uses_exact_frames() -> None:
     assert vocoder.flow_scheduler_cost(_payload(state)) == 6
 
 
-@contextmanager
-def _running_scheduler(
-    vocoder: stages.CosyVoice3Vocoder, **kwargs
-) -> Iterator[FunCosyVoice3StreamingVocoderScheduler]:
-    scheduler = FunCosyVoice3StreamingVocoderScheduler(vocoder, **kwargs)
-    try:
-        yield scheduler
-    finally:
-        scheduler.on_serving_stop()
-
-
-def _buffered_payload(*, prompt_tokens: int = 1, code_count: int = 2) -> StagePayload:
-    state = _state(prompt_tokens=prompt_tokens)
-    state.audio_codes = _codes(code_count)
-    return _payload(state)
-
-
-def test_scheduler_prepares_buffered_request_once_and_reuses_it(monkeypatch) -> None:
-    flow = _BatchCapableFakeFlow()
-    _install_fake_batch_adapter(monkeypatch, [])
-    vocoder = stages.CosyVoice3Vocoder(flow, _FakeHiFT())
-    calls = {"prepare_item": 0, "make_flow_input": 0}
-    prepare_item = vocoder.prepare_item
-    make_flow_input = vocoder.make_flow_input
-
-    def counted_prepare_item(payload):
-        calls["prepare_item"] += 1
-        return prepare_item(payload)
-
-    def counted_make_flow_input(state, codes):
-        calls["make_flow_input"] += 1
-        return make_flow_input(state, codes)
-
-    monkeypatch.setattr(vocoder, "prepare_item", counted_prepare_item)
-    monkeypatch.setattr(vocoder, "make_flow_input", counted_make_flow_input)
-    payload = _buffered_payload()
-    message = IncomingMessage(payload.request_id, "new_request", payload)
-
-    with _running_scheduler(
-        vocoder, max_batch_size=2, max_batch_wait_ms=0
-    ) as scheduler:
-        scheduler.enqueue(message)
-        scheduler.handle_message(scheduler.next_message(), None)
-        result = scheduler.outbox.get_nowait()
-        assert not scheduler.prepared_requests
-
-    assert result.type == "result"
-    assert calls == {"prepare_item": 1, "make_flow_input": 1}
-
-
-def test_scheduler_rejects_duplicate_active_buffered_request() -> None:
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    payload = _payload(_state())
-    first = IncomingMessage(payload.request_id, "new_request", payload)
-    second = IncomingMessage(payload.request_id, "new_request", payload)
-
-    with _running_scheduler(vocoder) as scheduler:
-        scheduler.enqueue(first)
-        with pytest.raises(AssertionError, match="duplicate prepared"):
-            scheduler.enqueue(second)
-
-
-def test_scheduler_rejects_mismatched_enqueue_request_id() -> None:
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    payload = _payload(_state(), "payload-id")
-    message = IncomingMessage("message-id", "new_request", payload)
-
-    with _running_scheduler(vocoder) as scheduler:
-        with pytest.raises(AssertionError, match="does not match payload.request_id"):
-            scheduler.enqueue(message)
-
-
-def test_prepared_request_cost_matches_flow_scheduler_cost() -> None:
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    payload = _buffered_payload()
-
-    assert vocoder.prepare_request(
-        payload
-    ).total_mel_frames == vocoder.flow_scheduler_cost(payload)
-
-
-def test_scheduler_does_not_eagerly_prepare_streaming_request() -> None:
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    payload = _payload(_state())
-    payload.request.params["stream"] = True
-    message = IncomingMessage(payload.request_id, "new_request", payload)
-
-    with _running_scheduler(vocoder) as scheduler:
-        scheduler.enqueue(message)
-        assert scheduler.inbox.get_nowait() is message
-        assert not scheduler.prepared_requests
-        assert scheduler.prepare_executor is None
-
-
-def test_prepare_workers_can_be_set() -> None:
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    payload = _buffered_payload()
-    message = IncomingMessage(payload.request_id, "new_request", payload)
-
-    with _running_scheduler(vocoder, prepare_workers=3) as scheduler:
-        scheduler.enqueue(message)
-        assert scheduler.prepare_workers == 3
-        assert scheduler.prepare_executor is not None
-        assert scheduler.prepare_executor._max_workers == 3
-
-
-def test_scheduler_skips_prepare_for_already_aborted_request() -> None:
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    payload = _buffered_payload()
-    message = IncomingMessage(payload.request_id, "new_request", payload)
-
-    with _running_scheduler(vocoder) as scheduler:
-        scheduler.abort(payload.request_id)
-        scheduler.enqueue(message)
-        assert scheduler.inbox.get_nowait() is message
-        assert not scheduler.prepared_requests
-
-
-def test_scheduler_abort_discards_prepared_request(monkeypatch) -> None:
-    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
-    prepare_request = vocoder.prepare_request
-    started = threading.Event()
-    release = threading.Event()
-
-    def blocked_prepare_request(payload):
-        started.set()
-        assert release.wait(timeout=1)
-        return prepare_request(payload)
-
-    monkeypatch.setattr(vocoder, "prepare_request", blocked_prepare_request)
-    payload = _buffered_payload()
-    message = IncomingMessage(payload.request_id, "new_request", payload)
-
-    with _running_scheduler(vocoder) as scheduler:
-        try:
-            scheduler.enqueue(message)
-            assert started.wait(timeout=1)
-            future = scheduler.prepared_requests[payload.request_id]
-            scheduler.abort(payload.request_id)
-            assert payload.request_id not in scheduler.prepared_requests
-            release.set()
-            future.result(timeout=1)
-        finally:
-            release.set()
-
-
 def test_flow_admission_defers_request_after_long_singleton(monkeypatch) -> None:
     monkeypatch.setattr(
         stages, "resolve_concrete_device", lambda device, gpu_id: torch.device("cpu")
@@ -895,19 +745,13 @@ def test_flow_admission_defers_request_after_long_singleton(monkeypatch) -> None
     long_state.audio_codes = _codes(2200)
     short_state = _state(prompt_tokens=0)
     short_state.audio_codes = _codes(2)
-    first = IncomingMessage("long", "new_request", _payload(long_state, "long"))
-    second = IncomingMessage("short", "new_request", _payload(short_state, "short"))
-    try:
-        scheduler.enqueue(first)
-        scheduler.enqueue(second)
-        first_msg = scheduler.next_message()
+    first = IncomingMessage("long", "new_request", _payload(long_state))
+    second = IncomingMessage("short", "new_request", _payload(short_state))
+    scheduler.inbox.put(second)
 
-        assert scheduler.max_batch_cost == 2000
-        assert first_msg is first
-        assert scheduler.collect_new_request_batch(first_msg) == [first]
-        assert scheduler.next_message() == second
-    finally:
-        scheduler.on_serving_stop()
+    assert scheduler.max_batch_cost == 2000
+    assert scheduler.collect_new_request_batch(first) == [first]
+    assert scheduler.next_message() == second
 
 
 def test_create_vocoder_executor_defaults_batch_for_real_lengths(monkeypatch) -> None:
@@ -973,28 +817,22 @@ def test_create_vocoder_executor_threads_batch_configuration(monkeypatch) -> Non
         flow_merge_pad_budget_percent=0,
     )
 
-    try:
-        assert isinstance(scheduler, FunCosyVoice3StreamingVocoderScheduler)
-        assert scheduler.max_batch_size == 6
-        assert scheduler.max_batch_wait_s == pytest.approx(0.007)
-        assert scheduler.max_batch_cost == 200
-        assert callable(scheduler.request_cost_fn)
-        assert scheduler.vocoder.flow_merge_max_gap_frames == 0
-        assert scheduler.vocoder.flow_merge_pad_budget_percent == 0
-        state = _state(prompt_tokens=1)
-        state.audio_codes = _codes(2)
-        payload = _payload(state)
-        message = IncomingMessage(payload.request_id, "new_request", payload)
-        scheduler.enqueue(message)
-        assert scheduler.message_cost(message) == 6
-        assert captured == {
-            "checkpoint_dir": "/checkpoint",
-            "device": "cpu",
-            "fp16": True,
-            "enable_flow_estimator_trt": False,
-        }
-    finally:
-        scheduler.on_serving_stop()
+    assert isinstance(scheduler, FunCosyVoice3StreamingVocoderScheduler)
+    assert scheduler.max_batch_size == 6
+    assert scheduler.max_batch_wait_s == pytest.approx(0.007)
+    assert scheduler.max_batch_cost == 200
+    assert callable(scheduler.request_cost_fn)
+    assert scheduler.vocoder.flow_merge_max_gap_frames == 0
+    assert scheduler.vocoder.flow_merge_pad_budget_percent == 0
+    state = _state(prompt_tokens=1)
+    state.audio_codes = _codes(2)
+    assert scheduler.request_cost_fn(_payload(state)) == 6
+    assert captured == {
+        "checkpoint_dir": "/checkpoint",
+        "device": "cpu",
+        "fp16": True,
+        "enable_flow_estimator_trt": False,
+    }
 
 
 def test_create_vocoder_executor_threads_trt_flag(monkeypatch) -> None:
