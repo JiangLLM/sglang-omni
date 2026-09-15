@@ -130,13 +130,6 @@ class FlowBatchInput:
 
 
 @dataclass(frozen=True)
-class PreparedVocoderRequest:
-    state: FunCosyVoice3State
-    flow_input: FlowBatchInput
-    total_mel_frames: int
-
-
-@dataclass(frozen=True)
 class PackedFlowBatch:
     token: torch.Tensor
     token_mask: torch.Tensor
@@ -1334,6 +1327,13 @@ def adaptive_flow_requests_grouping(
             return groups
 
     raise AssertionError("valid Flow requests must have a feasible partition")
+
+
+@dataclass(frozen=True)
+class PreparedVocoderRequest:
+    state: FunCosyVoice3State
+    flow_input: FlowBatchInput
+    total_mel_frames: int
 
 
 class CosyVoice3Vocoder(BatchVocoderBase):
