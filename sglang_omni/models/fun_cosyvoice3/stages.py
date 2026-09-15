@@ -137,14 +137,6 @@ class PreparedVocoderRequest:
     flow_input: FlowBatchInput
     total_mel_frames: int
 
-    def as_flow_request(self, index: int) -> PreparedFlowRequest:
-        return PreparedFlowRequest(
-            index=index,
-            sample_rate=self.state.sample_rate,
-            flow_input=self.flow_input,
-            total_mel_frames=self.total_mel_frames,
-        )
-
 
 @dataclass(frozen=True)
 class PackedFlowBatch:
@@ -1422,7 +1414,13 @@ class CosyVoice3Vocoder(BatchVocoderBase):
         self, requests: list[PreparedVocoderRequest]
     ) -> list[tuple[Any, int]]:
         flow_requests = [
-            request.as_flow_request(index) for index, request in enumerate(requests)
+            PreparedFlowRequest(
+                index=index,
+                sample_rate=request.state.sample_rate,
+                flow_input=request.flow_input,
+                total_mel_frames=request.total_mel_frames,
+            )
+            for index, request in enumerate(requests)
         ]
         results: list[tuple[Any, int] | None] = [None] * len(requests)
         flow_groups = adaptive_flow_requests_grouping(
@@ -2014,6 +2012,7 @@ def create_vocoder_executor(
     token_hop_len: int = TOKEN_HOP_LEN,
     token_max_hop_len: int = TOKEN_MAX_HOP_LEN,
     disable_hop_growth: bool = False,
+    prepare_workers: int | None = None,
     mlx_model_path: str | None = None,
     mlx_model_revision: str | None = None,
 ) -> Any:
@@ -2121,6 +2120,7 @@ def create_vocoder_executor(
         token_hop_len=token_hop_len,
         token_max_hop_len=token_max_hop_len,
         disable_hop_growth=disable_hop_growth,
+        prepare_workers=prepare_workers,
     )
     scheduler.warmup_now()
     return scheduler

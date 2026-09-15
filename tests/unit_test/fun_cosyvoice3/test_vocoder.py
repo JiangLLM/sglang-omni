@@ -769,7 +769,7 @@ def test_scheduler_prepares_buffered_request_once_and_reuses_it(monkeypatch) -> 
         scheduler.enqueue(message)
         scheduler.handle_message(scheduler.next_message(), None)
         result = scheduler.outbox.get_nowait()
-        assert not scheduler._prepared_requests
+        assert not scheduler.prepared_requests
 
     assert result.type == "result"
     assert calls == {"prepare_item": 1, "make_flow_input": 1}
@@ -815,8 +815,20 @@ def test_scheduler_does_not_eagerly_prepare_streaming_request() -> None:
     with _running_scheduler(vocoder) as scheduler:
         scheduler.enqueue(message)
         assert scheduler.inbox.get_nowait() is message
-        assert not scheduler._prepared_requests
-        assert scheduler._prepare_executor is None
+        assert not scheduler.prepared_requests
+        assert scheduler.prepare_executor is None
+
+
+def test_prepare_workers_can_be_set() -> None:
+    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
+    payload = _buffered_payload()
+    message = IncomingMessage(payload.request_id, "new_request", payload)
+
+    with _running_scheduler(vocoder, prepare_workers=3) as scheduler:
+        scheduler.enqueue(message)
+        assert scheduler.prepare_workers == 3
+        assert scheduler.prepare_executor is not None
+        assert scheduler.prepare_executor._max_workers == 3
 
 
 def test_scheduler_skips_prepare_for_already_aborted_request() -> None:
@@ -828,7 +840,7 @@ def test_scheduler_skips_prepare_for_already_aborted_request() -> None:
         scheduler.abort(payload.request_id)
         scheduler.enqueue(message)
         assert scheduler.inbox.get_nowait() is message
-        assert not scheduler._prepared_requests
+        assert not scheduler.prepared_requests
 
 
 def test_scheduler_abort_discards_prepared_request(monkeypatch) -> None:
@@ -850,9 +862,9 @@ def test_scheduler_abort_discards_prepared_request(monkeypatch) -> None:
         try:
             scheduler.enqueue(message)
             assert started.wait(timeout=1)
-            future = scheduler._prepared_requests[payload.request_id]
+            future = scheduler.prepared_requests[payload.request_id]
             scheduler.abort(payload.request_id)
-            assert payload.request_id not in scheduler._prepared_requests
+            assert payload.request_id not in scheduler.prepared_requests
             release.set()
             future.result(timeout=1)
         finally:

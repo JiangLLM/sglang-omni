@@ -12,6 +12,7 @@ the next step (or the stream-done flush) is when they become audio.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -47,7 +48,6 @@ from sglang_omni.utils.audio_payload import audio_waveform_payload
 logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 24000
-VOCODER_PREPARE_WORKERS = 1
 
 NextDecode = Literal["causal_window", "leftover", "fallback", "wait"]
 
@@ -99,6 +99,7 @@ class FunCosyVoice3StreamingVocoderScheduler(
         token_hop_len: int = TOKEN_HOP_LEN,
         token_max_hop_len: int = TOKEN_MAX_HOP_LEN,
         disable_hop_growth: bool = False,
+        prepare_workers: int | None = None,
     ) -> None:
         hop = int(token_hop_len)
         max_hop = int(token_max_hop_len)
@@ -115,14 +116,24 @@ class FunCosyVoice3StreamingVocoderScheduler(
             self.disable_hop_growth = bool(disable_hop_growth)
             self.vocoder = vocoder
             self.clock: Callable[[], float] = time.monotonic
-        # enqueue is on stage I/O; admission/decode/abort are on scheduler
-        # paths. The lock owns only the Future map and the lazy pool.
-        # prepare_request and future.result() always run outside it.
-        self._prepared_requests_lock = threading.Lock()
-        self._prepared_requests: dict[str, Future[PreparedVocoderRequest]] = {}
-        self._prepare_executor: ThreadPoolExecutor | None = None
+        # note (chenyang): enqueue is on stage I/O; admission/decode/abort are
+        # on the scheduler thread. Lock only the Future map and lazy pool;
+        # never wait on prepare_request or future.result while holding it.
+        if prepare_workers is None:
+            cpu_count = os.cpu_count()
+            if cpu_count is None:
+                self.prepare_workers = max(int(max_batch_size), 1)
+            else:
+                self.prepare_workers = min(cpu_count, max(int(max_batch_size), 1))
+        elif int(prepare_workers) <= 0:
+            raise ValueError(f"prepare_workers must be positive, got {prepare_workers}")
+        else:
+            self.prepare_workers = int(prepare_workers)
+        self.prepared_requests_lock = threading.Lock()
+        self.prepared_requests: dict[str, Future[PreparedVocoderRequest]] = {}
+        self.prepare_executor: ThreadPoolExecutor | None = None
         if request_cost_fn is None:
-            request_cost_fn = self._prepared_request_cost
+            request_cost_fn = self.prepared_request_cost
         super().__init__(
             self.vocode_payload,
             batch_compute_fn=self.vocode_payloads,
@@ -137,91 +148,77 @@ class FunCosyVoice3StreamingVocoderScheduler(
     def enqueue(self, msg: IncomingMessage) -> None:
         if msg.type == "new_request" and not self.is_streaming_payload(msg.data):
             payload = msg.data
-            assert msg.request_id == payload.request_id, (
-                f"Fun-CosyVoice3 enqueue request_id {msg.request_id!r} "
+            request_id = msg.request_id
+            assert request_id == payload.request_id, (
+                f"Fun-CosyVoice3 enqueue request_id {request_id!r} "
                 f"does not match payload.request_id {payload.request_id!r}"
             )
-            self._submit_prepared_request(msg.request_id, payload)
+            if not self.is_aborted(request_id):
+                with self.prepared_requests_lock:
+                    assert (
+                        request_id not in self.prepared_requests
+                    ), f"duplicate prepared Fun-CosyVoice3 request {request_id!r}"
+                    if self.prepare_executor is None:
+                        self.prepare_executor = ThreadPoolExecutor(
+                            max_workers=self.prepare_workers,
+                            thread_name_prefix="fun-cosyvoice3-vocoder-prepare",
+                        )
+                    self.prepared_requests[request_id] = self.prepare_executor.submit(
+                        self.vocoder.prepare_request, payload
+                    )
+                if self.is_aborted(request_id):
+                    self.discard_prepared_request(request_id)
         self.inbox.put(msg)
 
-    def _submit_prepared_request(self, request_id: str, payload: StagePayload) -> None:
-        if self.is_aborted(request_id):
+    def prepared_request_cost(self, payload: StagePayload) -> int:
+        with self.prepared_requests_lock:
+            future = self.prepared_requests.get(payload.request_id)
+        assert future is not None, (
+            f"buffered Fun-CosyVoice3 request {payload.request_id!r} "
+            "was not prepared on enqueue"
+        )
+        return future.result().total_mel_frames
+
+    def discard_prepared_request(self, request_id: str) -> None:
+        with self.prepared_requests_lock:
+            future = self.prepared_requests.pop(request_id, None)
+        if future is None:
             return
-        with self._prepared_requests_lock:
-            is_duplicate = request_id in self._prepared_requests
-            if not is_duplicate:
-                if self._prepare_executor is None:
-                    self._prepare_executor = ThreadPoolExecutor(
-                        max_workers=VOCODER_PREPARE_WORKERS,
-                        thread_name_prefix="fun-cosyvoice3-vocoder-prepare",
-                    )
-                self._prepared_requests[request_id] = self._prepare_executor.submit(
-                    self.vocoder.prepare_request, payload
-                )
-        assert (
-            not is_duplicate
-        ), f"duplicate prepared Fun-CosyVoice3 request {request_id!r}"
-        if self.is_aborted(request_id):
-            self._discard_prepared_request(request_id)
+        else:
+            future.cancel()
 
-    def _prepared_request_cost(self, payload: StagePayload) -> int:
-        prepared_request = self._require_prepared_future(payload.request_id).result()
-        return prepared_request.total_mel_frames
+    def abort_state(self, request_id: str) -> None:
+        super().abort_state(request_id)
+        self.discard_prepared_request(request_id)
 
-    def _require_prepared_future(
-        self, request_id: str
-    ) -> Future[PreparedVocoderRequest]:
-        with self._prepared_requests_lock:
-            future = self._prepared_requests.get(request_id)
-        assert (
-            future is not None
-        ), f"buffered Fun-CosyVoice3 request {request_id!r} was not prepared on enqueue"
-        return future
+    def on_serving_stop(self) -> None:
+        super().on_serving_stop()
+        with self.prepared_requests_lock:
+            futures = list(self.prepared_requests.values())
+            self.prepared_requests.clear()
+            executor = self.prepare_executor
+            self.prepare_executor = None
+        for future in futures:
+            future.cancel()
+        if executor is None:
+            return
+        else:
+            executor.shutdown(wait=False, cancel_futures=True)
 
-    def _pop_prepared_futures(
-        self, request_ids: list[str]
-    ) -> list[Future[PreparedVocoderRequest]]:
-        with self._prepared_requests_lock:
+    async def vocode_payload(self, payload: StagePayload) -> StagePayload:
+        decoded_payloads = await self.vocode_payloads([payload])
+        return decoded_payloads[0]
+
+    async def vocode_payloads(self, payloads: list[StagePayload]) -> list[StagePayload]:
+        with self.prepared_requests_lock:
             futures: list[Future[PreparedVocoderRequest]] = []
-            for request_id in request_ids:
-                future = self._prepared_requests.pop(request_id, None)
+            for request_id in [payload.request_id for payload in payloads]:
+                future = self.prepared_requests.pop(request_id, None)
                 assert future is not None, (
                     f"buffered Fun-CosyVoice3 request {request_id!r} "
                     "was not prepared on enqueue"
                 )
                 futures.append(future)
-        return futures
-
-    def _discard_prepared_request(self, request_id: str) -> None:
-        with self._prepared_requests_lock:
-            future = self._prepared_requests.pop(request_id, None)
-        if future is not None:
-            future.cancel()
-
-    def abort_state(self, request_id: str) -> None:
-        super().abort_state(request_id)
-        self._discard_prepared_request(request_id)
-
-    def on_serving_stop(self) -> None:
-        super().on_serving_stop()
-        with self._prepared_requests_lock:
-            futures = list(self._prepared_requests.values())
-            self._prepared_requests.clear()
-            executor = self._prepare_executor
-            self._prepare_executor = None
-        for future in futures:
-            future.cancel()
-        if executor is not None:
-            executor.shutdown(wait=False, cancel_futures=True)
-
-    async def vocode_payload(self, payload: StagePayload) -> StagePayload:
-        results = await self.vocode_payloads([payload])
-        return results[0]
-
-    async def vocode_payloads(self, payloads: list[StagePayload]) -> list[StagePayload]:
-        futures = self._pop_prepared_futures(
-            [payload.request_id for payload in payloads]
-        )
         prepared_requests = [future.result() for future in futures]
         decode_results = await self.vocoder.decode_prepared_batch(prepared_requests)
         return [
