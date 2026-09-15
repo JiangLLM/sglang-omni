@@ -1603,10 +1603,23 @@ class CosyVoice3Vocoder(BatchVocoderBase):
     def flow_scheduler_cost(self, payload: StagePayload) -> int:
         audio_codes = payload.data.get("audio_codes")
         if audio_codes is None:
-            raise RuntimeError("Fun-CosyVoice3 vocoder requires audio_codes from tts_engine")
-        else:
-            prompt_token = payload.data.get("flow_prompt_speech_token")
-            
+            raise RuntimeError(
+                "Fun-CosyVoice3 vocoder requires audio_codes from tts_engine"
+            )
+        prompt_tokens = payload.data.get("flow_prompt_speech_token")
+        token_count = 0
+        for value in (prompt_tokens, audio_codes):
+            if value is None:
+                continue
+            numel = 1
+            while isinstance(value, list):
+                if not value:
+                    numel = 0
+                    break
+                numel *= len(value)
+                value = value[0]
+            token_count += numel
+        return token_count * self.flow.token_mel_ratio
 
     def mel2wav_batch(self, mels: list[torch.Tensor]) -> list[torch.Tensor]:
         if not mels:
