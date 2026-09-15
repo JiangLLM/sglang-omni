@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import threading
 from types import SimpleNamespace
 from typing import ClassVar
 
@@ -719,6 +720,122 @@ def test_flow_scheduler_cost_uses_exact_frames() -> None:
     state.audio_codes = _codes(2)
 
     assert vocoder.flow_scheduler_cost(_payload(state)) == 6
+
+
+def test_scheduler_prepares_buffered_request_once_and_reuses_it(monkeypatch) -> None:
+    flow = _BatchCapableFakeFlow()
+    _install_fake_batch_adapter(monkeypatch, [])
+    vocoder = stages.CosyVoice3Vocoder(flow, _FakeHiFT())
+    calls = {"prepare_item": 0, "make_flow_input": 0}
+    prepare_item = vocoder.prepare_item
+    make_flow_input = vocoder.make_flow_input
+
+    def counted_prepare_item(payload):
+        calls["prepare_item"] += 1
+        return prepare_item(payload)
+
+    def counted_make_flow_input(state, codes):
+        calls["make_flow_input"] += 1
+        return make_flow_input(state, codes)
+
+    monkeypatch.setattr(vocoder, "prepare_item", counted_prepare_item)
+    monkeypatch.setattr(vocoder, "make_flow_input", counted_make_flow_input)
+    scheduler = FunCosyVoice3StreamingVocoderScheduler(
+        vocoder, max_batch_size=2, max_batch_wait_ms=0
+    )
+    state = _state(prompt_tokens=1)
+    state.audio_codes = _codes(2)
+    payload = _payload(state)
+    message = IncomingMessage(payload.request_id, "new_request", payload)
+
+    try:
+        scheduler.enqueue(message)
+        scheduler.handle_message(scheduler.next_message(), None)
+        result = scheduler.outbox.get_nowait()
+    finally:
+        scheduler.on_serving_stop()
+
+    assert result.type == "result"
+    assert calls == {"prepare_item": 1, "make_flow_input": 1}
+    assert not scheduler._prepared_requests
+
+
+def test_prepared_request_cost_matches_flow_scheduler_cost() -> None:
+    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
+    state = _state(prompt_tokens=1)
+    state.audio_codes = _codes(2)
+    payload = _payload(state)
+
+    assert vocoder.prepare_request(
+        payload
+    ).total_mel_frames == vocoder.flow_scheduler_cost(payload)
+
+
+def test_scheduler_does_not_eagerly_prepare_streaming_request() -> None:
+    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
+    scheduler = FunCosyVoice3StreamingVocoderScheduler(vocoder)
+    payload = _payload(_state())
+    payload.request.params["stream"] = True
+    message = IncomingMessage(payload.request_id, "new_request", payload)
+
+    try:
+        scheduler.enqueue(message)
+        assert scheduler.inbox.get_nowait() is message
+        assert not scheduler._prepared_requests
+    finally:
+        scheduler.on_serving_stop()
+
+
+def test_scheduler_direct_inbox_falls_back_to_synchronous_prepare(monkeypatch) -> None:
+    _install_fake_batch_adapter(monkeypatch, [])
+    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
+    scheduler = FunCosyVoice3StreamingVocoderScheduler(vocoder, max_batch_size=1)
+    state = _state()
+    state.audio_codes = _codes(2)
+    payload = _payload(state)
+    message = IncomingMessage(payload.request_id, "new_request", payload)
+
+    try:
+        scheduler.inbox.put(message)
+        scheduler.handle_message(scheduler.next_message(), None)
+        result = scheduler.outbox.get_nowait()
+    finally:
+        scheduler.on_serving_stop()
+
+    assert result.type == "result"
+    assert not scheduler._prepared_requests
+
+
+def test_scheduler_abort_discards_prepared_request(monkeypatch) -> None:
+    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
+    prepare_item = vocoder.prepare_request
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocked_prepare_request(payload):
+        started.set()
+        assert release.wait(timeout=1)
+        return prepare_item(payload)
+
+    monkeypatch.setattr(vocoder, "prepare_request", blocked_prepare_request)
+    scheduler = FunCosyVoice3StreamingVocoderScheduler(vocoder)
+    state = _state()
+    state.audio_codes = _codes(2)
+    payload = _payload(state)
+    message = IncomingMessage(payload.request_id, "new_request", payload)
+
+    try:
+        scheduler.enqueue(message)
+        assert started.wait(timeout=1)
+        with scheduler._prepared_requests_lock:
+            future = scheduler._prepared_requests[payload.request_id]
+        scheduler.abort(payload.request_id)
+        assert payload.request_id not in scheduler._prepared_requests
+        release.set()
+        future.result(timeout=1)
+    finally:
+        release.set()
+        scheduler.on_serving_stop()
 
 
 def test_flow_admission_defers_request_after_long_singleton(monkeypatch) -> None:

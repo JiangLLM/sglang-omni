@@ -132,6 +132,13 @@ class FlowBatchInput:
 
 
 @dataclass(frozen=True)
+class PreparedVocoderRequest:
+    state: FunCosyVoice3State
+    flow_input: FlowBatchInput
+    total_mel_frames: int
+
+
+@dataclass(frozen=True)
 class PackedFlowBatch:
     token: torch.Tensor
     token_mask: torch.Tensor
@@ -1381,25 +1388,42 @@ class CosyVoice3Vocoder(BatchVocoderBase):
         codes = torch.as_tensor(state.audio_codes, dtype=torch.long).reshape(-1)
         return state, codes
 
+    def prepare_request(self, payload: StagePayload) -> PreparedVocoderRequest:
+        state, codes = self.prepare_item(payload)
+        return self._prepare_item(state, codes)
+
+    def _prepare_item(
+        self, state: FunCosyVoice3State, codes: torch.Tensor
+    ) -> PreparedVocoderRequest:
+        flow_input = self.make_flow_input(state, codes)
+        total_mel_frames = (
+            flow_input.prompt_token.shape[1] + flow_input.token.shape[1]
+        ) * self.flow.token_mel_ratio
+        return PreparedVocoderRequest(
+            state=state,
+            flow_input=flow_input,
+            total_mel_frames=total_mel_frames,
+        )
+
     async def decode_batch(
         self, items: list[tuple[FunCosyVoice3State, torch.Tensor]]
     ) -> list[tuple[Any, int]]:
-        prepared: list[PreparedFlowRequest] = []
-        for index, (state, codes) in enumerate(items):
-            flow_input = self.make_flow_input(state, codes)
-            prepared.append(
-                PreparedFlowRequest(
-                    index=index,
-                    sample_rate=state.sample_rate,
-                    flow_input=flow_input,
-                    total_mel_frames=(
-                        flow_input.prompt_token.shape[1] + flow_input.token.shape[1]
-                    )
-                    * self.flow.token_mel_ratio,
-                )
-            )
+        prepared = [self._prepare_item(state, codes) for state, codes in items]
+        return await self.decode_prepared_batch(prepared)
 
-        results: list[tuple[Any, int] | None] = [None] * len(items)
+    async def decode_prepared_batch(
+        self, requests: list[PreparedVocoderRequest]
+    ) -> list[tuple[Any, int]]:
+        prepared = [
+            PreparedFlowRequest(
+                index=index,
+                sample_rate=request.state.sample_rate,
+                flow_input=request.flow_input,
+                total_mel_frames=request.total_mel_frames,
+            )
+            for index, request in enumerate(requests)
+        ]
+        results: list[tuple[Any, int] | None] = [None] * len(requests)
         flow_groups = adaptive_flow_requests_grouping(
             prepared,
             flow_merge_max_gap_frames=self.flow_merge_max_gap_frames,
@@ -2092,7 +2116,6 @@ def create_vocoder_executor(
         vocoder,
         max_batch_size=max_batch_size,
         max_batch_wait_ms=max_batch_wait_ms,
-        request_cost_fn=vocoder.flow_scheduler_cost,
         max_batch_cost=flow_batch_admission_frames,
         token_hop_len=token_hop_len,
         token_max_hop_len=token_max_hop_len,

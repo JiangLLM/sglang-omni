@@ -12,15 +12,21 @@ the next step (or the stream-done flush) is when they become audio.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
 
 import torch
 
 from sglang_omni.models.fun_cosyvoice3.payload_types import FunCosyVoice3State
-from sglang_omni.models.fun_cosyvoice3.stages import CosyVoice3Vocoder, FlowBatchInput
+from sglang_omni.models.fun_cosyvoice3.stages import (
+    CosyVoice3Vocoder,
+    FlowBatchInput,
+    PreparedVocoderRequest,
+)
 from sglang_omni.models.fun_cosyvoice3.streaming import (
     PRE_LOOKAHEAD_LEN,
     TOKEN_HOP_LEN,
@@ -108,6 +114,15 @@ class FunCosyVoice3StreamingVocoderScheduler(
             self.disable_hop_growth = bool(disable_hop_growth)
             self.vocoder = vocoder
             self.clock: Callable[[], float] = time.monotonic
+        self._prepared_requests_lock = threading.Lock()
+        self._prepared_requests: dict[str, Future[PreparedVocoderRequest]] = {}
+        self._prepare_executor_shutdown = False
+        self._prepare_executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="fun-cosyvoice3-vocoder-prepare",
+        )
+        if request_cost_fn is None:
+            request_cost_fn = self._prepared_request_cost
         super().__init__(
             self.vocode_payload,
             batch_compute_fn=self.vocode_payloads,
@@ -119,12 +134,103 @@ class FunCosyVoice3StreamingVocoderScheduler(
             max_batch_cost=max_batch_cost,
         )
 
+    def enqueue(self, msg: IncomingMessage) -> None:
+        if msg.type == "new_request":
+            try:
+                is_streaming = self.is_streaming_payload(msg.data)
+            except Exception:
+                # Keep malformed-request handling in the scheduler path. In
+                # particular, enqueue must not turn validation into a runtime
+                # error on the StageRuntime thread.
+                self.inbox.put(msg)
+                return
+            if not is_streaming:
+                previous: Future[PreparedVocoderRequest] | None = None
+                try:
+                    with self._prepared_requests_lock:
+                        if not self._prepare_executor_shutdown and not self.is_aborted(
+                            msg.request_id
+                        ):
+                            future = self._prepare_executor.submit(
+                                self.vocoder.prepare_request, msg.data
+                            )
+                            previous = self._prepared_requests.get(msg.request_id)
+                            self._prepared_requests[msg.request_id] = future
+                except Exception:
+                    logger.exception(
+                        "Fun-CosyVoice3 eager preparation submission failed for %s",
+                        msg.request_id,
+                    )
+                if previous is not None:
+                    previous.cancel()
+        self.inbox.put(msg)
+
+    def _prepared_request_cost(self, payload: StagePayload) -> int:
+        return self._resolve_prepared_request(payload, consume=False).total_mel_frames
+
+    def _resolve_prepared_request(
+        self, payload: StagePayload, *, consume: bool
+    ) -> PreparedVocoderRequest:
+        request_id = payload.request_id
+        with self._prepared_requests_lock:
+            future = self._prepared_requests.get(request_id)
+
+        if future is None:
+            return self.vocoder.prepare_request(payload)
+
+        try:
+            return future.result()
+        finally:
+            if consume:
+                with self._prepared_requests_lock:
+                    if self._prepared_requests.get(request_id) is future:
+                        self._prepared_requests.pop(request_id, None)
+
+    def _discard_prepared_request(self, request_id: str) -> None:
+        with self._prepared_requests_lock:
+            future = self._prepared_requests.pop(request_id, None)
+        if future is not None:
+            future.cancel()
+
+    def abort_state(self, request_id: str) -> None:
+        super().abort_state(request_id)
+        self._discard_prepared_request(request_id)
+
+    def on_serving_stop(self) -> None:
+        with self._prepared_requests_lock:
+            self._prepare_executor_shutdown = True
+            futures = list(self._prepared_requests.values())
+            self._prepared_requests.clear()
+        for future in futures:
+            future.cancel()
+        self._prepare_executor.shutdown(wait=False, cancel_futures=True)
+
     async def vocode_payload(self, payload: StagePayload) -> StagePayload:
-        results = await self.vocoder.decode_payloads([payload])
+        results = await self.vocode_payloads([payload])
         return results[0]
 
     async def vocode_payloads(self, payloads: list[StagePayload]) -> list[StagePayload]:
-        return await self.vocoder.decode_payloads(payloads)
+        prepared: list[PreparedVocoderRequest] = []
+        try:
+            for payload in payloads:
+                prepared.append(self._resolve_prepared_request(payload, consume=True))
+        except BaseException:
+            for payload in payloads[len(prepared) :]:
+                self._discard_prepared_request(payload.request_id)
+            raise
+
+        results = await self.vocoder.decode_prepared_batch(prepared)
+        if len(results) != len(prepared):
+            raise RuntimeError(
+                f"decode_prepared_batch returned {len(results)} results for "
+                f"{len(prepared)} inputs"
+            )
+        return [
+            self.vocoder.store_result(payload, request.state, wav, sample_rate)
+            for payload, request, (wav, sample_rate) in zip(
+                payloads, prepared, results, strict=True
+            )
+        ]
 
     def create_stream_state(self, request_id: str) -> CosyVoice3StreamState:
         return CosyVoice3StreamState(hop_len=self.token_hop_len)
