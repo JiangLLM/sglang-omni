@@ -1224,9 +1224,9 @@ class CosyVoice3Vocoder(BatchVocoderBase):
 
     def prepare_request(self, payload: StagePayload) -> PreparedVocoderRequest:
         state, codes = self.prepare_item(payload)
-        return self._prepare_from_codes(state, codes)
+        return self.prepare_from_codes(state, codes)
 
-    def _prepare_from_codes(
+    def prepare_from_codes(
         self, state: FunCosyVoice3State, codes: torch.Tensor
     ) -> PreparedVocoderRequest:
         flow_input = self.make_flow_input(state, codes)
@@ -1241,7 +1241,7 @@ class CosyVoice3Vocoder(BatchVocoderBase):
         self, items: list[tuple[FunCosyVoice3State, torch.Tensor]]
     ) -> list[tuple[Any, int]]:
         return await self.decode_prepared_batch(
-            [self._prepare_from_codes(state, codes) for state, codes in items]
+            [self.prepare_from_codes(state, codes) for state, codes in items]
         )
 
     async def decode_prepared_batch(
