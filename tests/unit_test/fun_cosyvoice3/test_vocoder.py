@@ -760,6 +760,21 @@ def test_scheduler_prepares_buffered_request_once_and_reuses_it(monkeypatch) -> 
     assert not scheduler._prepared_requests
 
 
+def test_scheduler_rejects_duplicate_active_buffered_request() -> None:
+    vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
+    scheduler = FunCosyVoice3StreamingVocoderScheduler(vocoder)
+    payload = _payload(_state())
+    first = IncomingMessage(payload.request_id, "new_request", payload)
+    second = IncomingMessage(payload.request_id, "new_request", payload)
+
+    try:
+        scheduler.enqueue(first)
+        with pytest.raises(AssertionError):
+            scheduler.enqueue(second)
+    finally:
+        scheduler.on_serving_stop()
+
+
 def test_prepared_request_cost_matches_flow_scheduler_cost() -> None:
     vocoder = stages.CosyVoice3Vocoder(_BatchCapableFakeFlow(), _FakeHiFT())
     state = _state(prompt_tokens=1)

@@ -114,6 +114,9 @@ class FunCosyVoice3StreamingVocoderScheduler(
             self.disable_hop_growth = bool(disable_hop_growth)
             self.vocoder = vocoder
             self.clock: Callable[[], float] = time.monotonic
+        # enqueue runs on stage I/O; admission/decode/abort run on scheduler paths.
+        # The lock protects only Future-map ownership; preparation and
+        # future.result() always run outside it.
         self._prepared_requests_lock = threading.Lock()
         self._prepared_requests: dict[str, Future[PreparedVocoderRequest]] = {}
         self._prepare_executor = ThreadPoolExecutor(
@@ -137,6 +140,7 @@ class FunCosyVoice3StreamingVocoderScheduler(
         if msg.type == "new_request" and not self.is_streaming_payload(msg.data):
             with self._prepared_requests_lock:
                 if not self.is_aborted(msg.request_id):
+                    assert msg.request_id not in self._prepared_requests
                     self._prepared_requests[msg.request_id] = (
                         self._prepare_executor.submit(
                             self.vocoder.prepare_request, msg.data
@@ -144,14 +148,12 @@ class FunCosyVoice3StreamingVocoderScheduler(
                     )
         self.inbox.put(msg)
 
-    def _peek_prepared_request(self, request_id: str) -> Future[PreparedVocoderRequest]:
-        with self._prepared_requests_lock:
-            return self._prepared_requests[request_id]
-
     def _prepared_request_cost(self, payload: StagePayload) -> int:
-        return self._peek_prepared_request(payload.request_id).result().total_mel_frames
+        with self._prepared_requests_lock:
+            future = self._prepared_requests[payload.request_id]
+        return future.result().total_mel_frames
 
-    def _pop_prepared_requests(
+    def _pop_prepared_futures(
         self, request_ids: list[str]
     ) -> list[Future[PreparedVocoderRequest]]:
         with self._prepared_requests_lock:
@@ -182,7 +184,7 @@ class FunCosyVoice3StreamingVocoderScheduler(
         return results[0]
 
     async def vocode_payloads(self, payloads: list[StagePayload]) -> list[StagePayload]:
-        futures = self._pop_prepared_requests(
+        futures = self._pop_prepared_futures(
             [payload.request_id for payload in payloads]
         )
         prepared = [future.result() for future in futures]
