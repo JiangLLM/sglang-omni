@@ -9,16 +9,14 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+from cosyvoice.flow.flow import CausalMaskedDiffWithDiT
+from cosyvoice.flow.flow_matching import ConditionalCFM
 from torch.nn.utils.parametrize import is_parametrized, remove_parametrizations
-
-if TYPE_CHECKING:
-    from cosyvoice.flow.flow import CausalMaskedDiffWithDiT
-    from cosyvoice.flow.flow_matching import ConditionalCFM
 
 from sglang_omni.models.fun_cosyvoice3.config import reject_conflicting_dit_accelerators
 from sglang_omni.models.fun_cosyvoice3.flow_estimator_trt import (
