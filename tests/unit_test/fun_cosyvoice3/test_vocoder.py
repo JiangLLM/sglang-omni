@@ -110,7 +110,7 @@ def test_mps_hift_adapter_moves_f0_to_cpu_before_float64() -> None:
 
     hift = SimpleNamespace(f0_predictor=_Predictor())
 
-    stages._MpsHiFTAdapter(hift, "mps")
+    stages.MpsHiFTAdapter(hift, "mps")
 
     assert calls == [
         ((), {"device": "cpu"}),

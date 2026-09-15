@@ -81,39 +81,39 @@ FLOW_CUDA_GRAPH_FRAME_BUCKET = 16
 # to 489 frames.
 
 
-class _MpsHiFTAdapter:
+class MpsHiFTAdapter:
     """Keep HiFT's float64 F0 branch on CPU while decoding on MPS."""
 
     def __init__(self, hift: Any, device: str) -> None:
-        self._hift = hift
-        self._device = torch.device(device)
-        self._f0_predictor = hift.f0_predictor
+        self.hift = hift
+        self.device = torch.device(device)
+        self.f0_predictor = hift.f0_predictor
         # Note (yexiaodong): MPS rejects float64 transfers; keep the F0 branch
         # on CPU while the remaining vocoder runs on MPS.
-        self._f0_predictor.to(device="cpu")
-        self._f0_predictor.to(dtype=torch.float64)
+        self.f0_predictor.to(device="cpu")
+        self.f0_predictor.to(dtype=torch.float64)
 
     def __getattr__(self, name: str) -> Any:
-        return getattr(self._hift, name)
+        return getattr(self.hift, name)
 
     def parameters(self):
-        return self._hift.parameters()
+        return self.hift.parameters()
 
     @torch.inference_mode()
     def inference(self, speech_feat: torch.Tensor, finalize: bool = True):
         cpu_features = speech_feat.detach().to(device="cpu")
-        f0 = self._f0_predictor(
+        f0 = self.f0_predictor(
             cpu_features.to(dtype=torch.float64),
             finalize=finalize,
-        ).to(device=self._device, dtype=speech_feat.dtype)
-        source = self._hift.f0_upsamp(f0[:, None]).transpose(1, 2)
-        source, _, _ = self._hift.m_source(source)
+        ).to(device=self.device, dtype=speech_feat.dtype)
+        source = self.hift.f0_upsamp(f0[:, None]).transpose(1, 2)
+        source, _, _ = self.hift.m_source(source)
         source = source.transpose(1, 2)
         if finalize:
-            generated = self._hift.decode(x=speech_feat, s=source, finalize=True)
+            generated = self.hift.decode(x=speech_feat, s=source, finalize=True)
         else:
-            causal_padding = self._f0_predictor.condnet[0].causal_padding
-            generated = self._hift.decode(
+            causal_padding = self.f0_predictor.condnet[0].causal_padding
+            generated = self.hift.decode(
                 x=speech_feat[:, :, :-causal_padding],
                 s=source,
                 finalize=False,
@@ -1060,7 +1060,7 @@ def _load_cosyvoice3_flow_hift_lightweight(
         torch.device(device).type == "mps"
         and not current_platform.is_float64_supported()
     ):
-        hift = _MpsHiFTAdapter(hift, device)
+        hift = MpsHiFTAdapter(hift, device)
     del configs
     return (
         FunCosyVoice3Flow(flow, packed_estimator=PackedDiT(flow.decoder.estimator)),
