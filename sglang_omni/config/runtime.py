@@ -94,7 +94,7 @@ def typed_stage_kwarg_path(name: str) -> str:
 def apply_typed_stage_kwargs(
     factory: Callable[..., object],
     kwargs: dict[str, Any],
-    typed_kwargs: Mapping[str, Any],
+    typed_kwargs: Mapping[str, object],
     *,
     stage_name: str,
 ) -> dict[str, Any]:
@@ -158,7 +158,7 @@ def resolve_factory_signature_args(
     factory: Callable[..., object],
     args: dict[str, Any],
     *,
-    defaults: Mapping[str, Any],
+    defaults: Mapping[str, object],
     require_gpu_id: bool = False,
     stage_name: str | None = None,
 ) -> dict[str, Any]:
