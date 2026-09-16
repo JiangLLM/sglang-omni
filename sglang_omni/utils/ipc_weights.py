@@ -50,11 +50,13 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, BinaryIO, Protocol
+from typing import Any, BinaryIO, Protocol, TypeVar
 
 import torch
 
 logger = logging.getLogger(__name__)
+
+_IdentityValueT = TypeVar("_IdentityValueT")
 
 ENV_WEIGHT_SHARE = "SGLANG_OMNI_WEIGHT_SHARE"
 ENV_WEIGHT_SHARE_TIMEOUT_S = "SGLANG_OMNI_WEIGHT_SHARE_TIMEOUT_S"
@@ -362,7 +364,7 @@ SUPPORTED_WEIGHT_SHARE_ARCHITECTURES = frozenset(WEIGHT_SHARE_POLICIES)
 _FS_TRUST_ENFORCED = os.name == "posix"
 
 
-def validate_weight_share_architecture(architectures: Any) -> WeightSharePolicy:
+def validate_weight_share_architecture(architectures: object) -> WeightSharePolicy:
     """Fail fast unless the architecture is audited; return its share policy."""
     # Note (Jiaxin Deng): no normalizing away malformed entries; a config that
     # lists anything besides one nonblank architecture string must fail here.
@@ -725,7 +727,7 @@ _REQUIRED_PAYLOAD_FIELDS: dict[str, type | tuple[type, ...]] = {
 }
 
 
-def _safe_unpickle(fh: BinaryIO, file_path: str) -> Any:
+def _safe_unpickle(fh: BinaryIO, file_path: str) -> object:
     try:
         return pickle.load(fh)
     except WeightShareError:
@@ -736,7 +738,7 @@ def _safe_unpickle(fh: BinaryIO, file_path: str) -> Any:
         ) from exc
 
 
-def _validate_payload_schema(payload: Any, file_path: str) -> None:
+def _validate_payload_schema(payload: object, file_path: str) -> None:
     if not isinstance(payload, dict):
         raise WeightShareError(
             f"weight-share handle {file_path} is not a payload dict "
@@ -871,7 +873,7 @@ def _attach_and_check(
 
 
 def _check_model_identity(
-    payload: dict[str, Any],
+    payload: dict[str, _IdentityValueT],
     model_path: str | None,
     model_revision: str | None,
     file_path: str,
