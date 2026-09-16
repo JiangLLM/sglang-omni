@@ -39,7 +39,7 @@ _AUK_MODEL_NAMES = frozenset({"auk", "auk-flash"})
 _AUK_WEIGHT_MARKERS = ("auk_base.safetensors", "auk_flash.safetensors")
 
 
-def architecture_from_hf_config(hf_config: Any) -> str | None:
+def architecture_from_hf_config(hf_config: object) -> str | None:
     """Prefer HF architectures; fall back to architecture/model_type."""
     archs = getattr(hf_config, "architectures", None)
     if archs:
@@ -250,7 +250,7 @@ def load_hf_config(
     return cfg
 
 
-def instantiate_module(module_cls: type[nn.Module], config: Any) -> nn.Module:
+def instantiate_module(module_cls: type[nn.Module], config: object) -> nn.Module:
     """Instantiate a module without allocating its parameters."""
     with no_init_weights():
         if hasattr(module_cls, "_from_config"):
