@@ -113,7 +113,7 @@ class DataAckMessage(msgspec.Struct):
     success: bool = True
     error: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, str | bool]:
         _require_str(self.request_id, "request_id")
         _require_str(self.from_stage, "from_stage")
         _require_str(self.to_stage, "to_stage")
@@ -125,7 +125,7 @@ class DataAckMessage(msgspec.Struct):
                 raise ValueError("successful data ack must not carry error")
         else:
             _require_str(self.error, "error")
-        d: dict[str, Any] = {
+        d: dict[str, str | bool] = {
             "type": "data_ack",
             "request_id": self.request_id,
             "from_stage": self.from_stage,
@@ -164,7 +164,7 @@ class AbortMessage:
 
     request_id: str
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, str]:
         return {"type": "abort", "request_id": self.request_id}
 
     @classmethod
@@ -275,7 +275,7 @@ class SubmitMessage:
 class ShutdownMessage:
     """Signal graceful shutdown to a stage."""
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, str]:
         return {"type": "shutdown"}
 
     @classmethod
@@ -292,7 +292,7 @@ class ProfilerStartMessage:
     event_dir: str | None = None  # Per-stage JSONL event sink dir for request profiling
     enable_torch: bool = True  # When False, only request-level events are captured
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, str | bool | None]:
         return {
             "type": "profiler_start",
             "run_id": self.run_id,
@@ -317,7 +317,7 @@ class ProfilerStopMessage:
 
     run_id: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, str | None]:
         return {"type": "profiler_stop", "run_id": self.run_id}
 
     @classmethod
@@ -402,19 +402,19 @@ def parse_message(
         raise ValueError(f"Unknown message type: {msg_type}")
 
 
-def _require_str(value: Any, name: str) -> str:
+def _require_str(value: object, name: str) -> str:
     if not isinstance(value, str) or value == "":
         raise TypeError(f"{name} must be a non-empty str")
     return value
 
 
-def _require_bool(value: Any, name: str) -> bool:
+def _require_bool(value: object, name: str) -> bool:
     if type(value) is not bool:
         raise TypeError(f"{name} must be bool")
     return value
 
 
-def _require_non_negative_int(value: Any, name: str) -> int:
+def _require_non_negative_int(value: object, name: str) -> int:
     if type(value) is not int or value < 0:
         raise TypeError(f"{name} must be a non-negative int")
     return value
