@@ -44,6 +44,25 @@ class _CudaStorageHandle(TypedDict):
     tensor_offset: int
 
 
+class _CudaKvPoolRequired(TypedDict):
+    registration_id: str
+    device_id: int
+    storages: list[_CudaStorageHandle]
+
+
+class _CudaKvPoolInfo(_CudaKvPoolRequired, total=False):
+    ready_event: bytes
+
+
+class _CudaKvMetadataRequired(TypedDict):
+    engine_id: str
+    cuda_ipc_kv: _CudaKvPoolInfo
+
+
+class _CudaKvMetadata(_CudaKvMetadataRequired, total=False):
+    transfer_info: dict[str, int]
+
+
 class _CudaIpcTraceFields(TypedDict):
     request_id: str | None
     slot_index: int
@@ -251,7 +270,7 @@ class _ReceiverAckOperation(RelayOperation):
 
     def __init__(
         self,
-        metadata: dict[str, Any],
+        metadata: dict[str, Any] | _CudaKvMetadata,
         *,
         held_references: tuple[Any, ...] = (),
     ) -> None:
@@ -262,7 +281,7 @@ class _ReceiverAckOperation(RelayOperation):
         self._completed = False
 
     @property
-    def metadata(self) -> dict[str, Any]:
+    def metadata(self) -> dict[str, Any] | _CudaKvMetadata:
         return self._metadata
 
     async def _wait_for_receiver(self, timeout: float) -> None:
@@ -590,7 +609,7 @@ class CudaIpcRelay(Relay):
         credits: int | None = 2,
         slot_size_kb: int = 64,
         pool_size_mb: int | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         if kwargs:
             raise TypeError(
@@ -1029,7 +1048,7 @@ class CudaIpcRelay(Relay):
         pool_id: str,
         *,
         destination_registration_id: str,
-    ) -> dict[str, Any]:
+    ) -> _CudaKvMetadata:
         pool = self._kv_pools.get(pool_id)
         if pool is None:
             raise KeyError(f"unknown cuda_ipc KV pool {pool_id!r}")
