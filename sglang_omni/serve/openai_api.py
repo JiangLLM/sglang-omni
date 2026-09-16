@@ -68,6 +68,7 @@ from sglang_omni.http.admin_auth import (
     resolve_admin_api_key,
 )
 from sglang_omni.http.favicon import register_favicon
+from sglang_omni.proto.admin import AdminResponse
 from sglang_omni.serve.generation_params import (
     record_explicit_generation_params as _record_explicit_generation_params,
 )
@@ -597,13 +598,13 @@ def _request_payload(req: AdminRequestBase) -> dict[str, Any]:
     return req.model_dump(exclude={"stages", "timeout_s"}, exclude_none=True)
 
 
-def _admin_response(result: dict[str, Any]) -> JSONResponse:
+def _admin_response(result: dict[str, Any] | AdminResponse) -> JSONResponse:
     if not result.get("success", False):
         raise HTTPException(status_code=400, detail=result)
     return JSONResponse(content=result)
 
 
-def _model_info_response(result: dict[str, Any]) -> JSONResponse:
+def _model_info_response(result: dict[str, Any] | AdminResponse) -> JSONResponse:
     if not result.get("success", False):
         raise HTTPException(status_code=400, detail=result)
 
@@ -626,7 +627,9 @@ def _model_info_response(result: dict[str, Any]) -> JSONResponse:
     return JSONResponse(content=payload)
 
 
-def _extract_model_info_stage_data(result: dict[str, Any]) -> list[dict[str, Any]]:
+def _extract_model_info_stage_data(
+    result: dict[str, Any] | AdminResponse,
+) -> list[dict[str, Any]]:
     infos: list[dict[str, Any]] = []
     for item in result.get("results", []) or []:
         if not isinstance(item, dict):
@@ -644,7 +647,7 @@ def _extract_model_info_stage_data(result: dict[str, Any]) -> list[dict[str, Any
 
 
 def _common_model_info_value(
-    result: dict[str, Any],
+    result: dict[str, Any] | AdminResponse,
     stage_infos: list[dict[str, Any]],
     key: str,
     *,

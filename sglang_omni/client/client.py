@@ -7,7 +7,7 @@ import asyncio
 import uuid
 from contextlib import aclosing
 from dataclasses import replace
-from typing import Any, AsyncIterator, Callable, TypedDict
+from typing import Any, AsyncIterator, Callable, TypedDict, TypeVar
 
 import numpy as np
 
@@ -30,8 +30,12 @@ from sglang_omni.client.types import (
     SpeechResult,
     UsageInfo,
 )
-from sglang_omni.pipeline.coordinator import Coordinator
+from sglang_omni.pipeline.coordinator import Coordinator, CoordinatorHealth
 from sglang_omni.proto import OmniRequest, RequestState, StreamMessage
+from sglang_omni.proto.admin import AdminResponse
+
+
+_PayloadValue = TypeVar("_PayloadValue")
 
 
 class _EncodeAudioOptions(TypedDict, total=False):
@@ -300,17 +304,17 @@ class Client:
             return None
         return info.state
 
-    def health(self) -> dict[str, Any]:
+    def health(self) -> CoordinatorHealth:
         return self._coordinator.health()
 
     async def admin(
         self,
         action: str,
-        payload: dict[str, Any] | None = None,
+        payload: dict[str, _PayloadValue] | None = None,
         *,
         stages: list[str] | None = None,
         timeout_s: float = 60.0,
-    ) -> dict[str, Any]:
+    ) -> AdminResponse:
         return await self._coordinator.admin(
             action,
             payload,
@@ -323,7 +327,7 @@ class Client:
         *,
         stages: list[str] | None = None,
         timeout_s: float = 30.0,
-    ) -> dict[str, Any]:
+    ) -> AdminResponse:
         return await self._coordinator.model_info(
             stages=stages,
             timeout_s=timeout_s,
@@ -331,11 +335,11 @@ class Client:
 
     async def pause_generation(
         self,
-        payload: dict[str, Any] | None = None,
+        payload: dict[str, _PayloadValue] | None = None,
         *,
         stages: list[str] | None = None,
         timeout_s: float = 60.0,
-    ) -> dict[str, Any]:
+    ) -> AdminResponse:
         return await self._coordinator.pause_generation(
             payload,
             stages=stages,
@@ -344,11 +348,11 @@ class Client:
 
     async def continue_generation(
         self,
-        payload: dict[str, Any] | None = None,
+        payload: dict[str, _PayloadValue] | None = None,
         *,
         stages: list[str] | None = None,
         timeout_s: float = 60.0,
-    ) -> dict[str, Any]:
+    ) -> AdminResponse:
         return await self._coordinator.continue_generation(
             payload,
             stages=stages,
@@ -357,11 +361,11 @@ class Client:
 
     async def update_weights_from_disk(
         self,
-        payload: dict[str, Any],
+        payload: dict[str, _PayloadValue],
         *,
         stages: list[str] | None = None,
         timeout_s: float = 120.0,
-    ) -> dict[str, Any]:
+    ) -> AdminResponse:
         return await self._coordinator.update_weights_from_disk(
             payload,
             stages=stages,
@@ -370,11 +374,11 @@ class Client:
 
     async def init_weights_update_group(
         self,
-        payload: dict[str, Any],
+        payload: dict[str, _PayloadValue],
         *,
         stages: list[str] | None = None,
         timeout_s: float = 300.0,
-    ) -> dict[str, Any]:
+    ) -> AdminResponse:
         return await self._coordinator.init_weights_update_group(
             payload,
             stages=stages,
@@ -383,11 +387,11 @@ class Client:
 
     async def destroy_weights_update_group(
         self,
-        payload: dict[str, Any],
+        payload: dict[str, _PayloadValue],
         *,
         stages: list[str] | None = None,
         timeout_s: float = 300.0,
-    ) -> dict[str, Any]:
+    ) -> AdminResponse:
         return await self._coordinator.destroy_weights_update_group(
             payload,
             stages=stages,
@@ -396,11 +400,11 @@ class Client:
 
     async def update_weights_from_distributed(
         self,
-        payload: dict[str, Any],
+        payload: dict[str, _PayloadValue],
         *,
         stages: list[str] | None = None,
         timeout_s: float = 300.0,
-    ) -> dict[str, Any]:
+    ) -> AdminResponse:
         return await self._coordinator.update_weights_from_distributed(
             payload,
             stages=stages,
@@ -409,11 +413,11 @@ class Client:
 
     async def weights_checker(
         self,
-        payload: dict[str, Any] | None = None,
+        payload: dict[str, _PayloadValue] | None = None,
         *,
         stages: list[str] | None = None,
         timeout_s: float = 120.0,
-    ) -> dict[str, Any]:
+    ) -> AdminResponse:
         return await self._coordinator.weights_checker(
             payload,
             stages=stages,
