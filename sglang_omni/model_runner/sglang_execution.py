@@ -24,12 +24,18 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, Protocol
 
 import torch
 
 
-def attn_forward_context(attn_backend: Any):
+class _SpecAlgorithm(Protocol):
+    def is_none(self) -> object: ...
+
+
+def attn_forward_context(
+    attn_backend: Any,
+) -> contextlib.AbstractContextManager[None]:
     """Enter SGLang's ambient ForwardContext unless one is already active.
 
     Attention backends read the context that ModelRunner._forward_raw
@@ -56,7 +62,7 @@ class SGLangExecutionBridge:
         *,
         device: torch.device,
         worker: Any,
-        spec_algorithm: Any,
+        spec_algorithm: _SpecAlgorithm,
         future_map: Any,
     ) -> None:
         from sglang.srt.managers.overlap_utils import RelayPayload
