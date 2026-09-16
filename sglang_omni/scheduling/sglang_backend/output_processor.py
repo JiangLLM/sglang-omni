@@ -4,11 +4,23 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar
 
 import torch
 
-from sglang_omni.scheduling.types import RequestOutput, SchedulerOutput
+from sglang_omni.scheduling.types import (
+    RequestOutput,
+    SchedulerOutput,
+    SchedulerRequest,
+)
+
+
+if TYPE_CHECKING:
+    from sglang.srt.managers.scheduler import GenerationBatchResult
+
+
+_HiddenKey = TypeVar("_HiddenKey")
+_AuxHiddenExtra: TypeAlias = dict[str, torch.Tensor | dict[str | int, torch.Tensor]]
 
 
 class SGLangOutputProcessor:
@@ -19,8 +31,8 @@ class SGLangOutputProcessor:
         capture_hidden: bool = False,
         capture_hidden_layers: list[int] | None = None,
         model: Any = None,
-        should_emit_hidden: Callable[[Any], bool] | None = None,
-    ):
+        should_emit_hidden: Callable[[SchedulerRequest], bool] | None = None,
+    ) -> None:
         self._capture_hidden = capture_hidden
         self._capture_hidden_layers = capture_hidden_layers
         self._model = model
@@ -28,7 +40,7 @@ class SGLangOutputProcessor:
 
     def process(
         self,
-        model_output: Any,
+        model_output: GenerationBatchResult,
         scheduler_output: SchedulerOutput,
         host_token_ids: torch.Tensor | None = None,
     ) -> dict[str, RequestOutput]:
@@ -61,14 +73,14 @@ class SGLangOutputProcessor:
             )
         return outputs
 
-    def _should_emit_hidden_for_request(self, request: Any) -> bool:
+    def _should_emit_hidden_for_request(self, request: SchedulerRequest) -> bool:
         if self._should_emit_hidden is None:
             return True
         return self._should_emit_hidden(request)
 
     def _build_hidden_extras_by_request(
         self,
-        model_output: Any,
+        model_output: GenerationBatchResult,
         *,
         scheduler_output: SchedulerOutput,
         should_emit_hidden_by_request: list[bool],
@@ -125,10 +137,10 @@ class SGLangOutputProcessor:
         self,
         aux_hidden_states: Sequence[torch.Tensor],
         *,
-        model_output: Any,
+        model_output: GenerationBatchResult,
         scheduler_output: SchedulerOutput,
         request_indexes: list[int],
-    ) -> dict[int, dict[str, Any] | None]:
+    ) -> dict[int, _AuxHiddenExtra | None]:
         if not request_indexes:
             return {}
         stream_hidden_states = self._extract_stream_hidden_states(model_output)
@@ -149,7 +161,7 @@ class SGLangOutputProcessor:
         request_index: int,
         scheduler_output: SchedulerOutput,
         stream_hidden_states: torch.Tensor | None,
-    ) -> dict[str, Any]:
+    ) -> _AuxHiddenExtra:
         per_request_hidden = {}
         for layer_id, tensor in zip(
             self._capture_hidden_layers or [],
@@ -162,7 +174,7 @@ class SGLangOutputProcessor:
                 scheduler_output=scheduler_output,
             ).clone()
 
-        extra: dict[str, Any] = {"hidden_states": per_request_hidden}
+        extra: _AuxHiddenExtra = {"hidden_states": per_request_hidden}
         if stream_hidden_states is not None:
             extra["stream_hidden_states"] = self._slice_per_request_tensor(
                 stream_hidden_states,
@@ -173,11 +185,11 @@ class SGLangOutputProcessor:
 
     def _build_dict_hidden_extra(
         self,
-        hidden_states: dict[Any, torch.Tensor],
+        hidden_states: dict[_HiddenKey, torch.Tensor],
         *,
         request_index: int,
         scheduler_output: SchedulerOutput,
-    ) -> dict[str, Any]:
+    ) -> dict[str, dict[_HiddenKey, torch.Tensor]]:
         return {
             "hidden_states": {
                 key: self._slice_per_request_tensor(
@@ -189,7 +201,9 @@ class SGLangOutputProcessor:
             }
         }
 
-    def _extract_stream_hidden_states(self, model_output: Any) -> torch.Tensor | None:
+    def _extract_stream_hidden_states(
+        self, model_output: GenerationBatchResult
+    ) -> torch.Tensor | None:
         logits_output = model_output.logits_output
         if logits_output is None:
             return None
