@@ -75,7 +75,9 @@ class DecodeContinuation:
     mm_audio_tokens: int = 0
     mm_video_tokens: int = 0
     return_logprob: bool = False
-    output_token_logprobs: list[Any] = dataclasses.field(default_factory=list)
+    output_token_logprobs: list[list[float | int]] = dataclasses.field(
+        default_factory=list
+    )
     top_logprobs_num: int = 0
     token_ids_logprob: list[int] | None = None
     logprob_start_len: int = -1
