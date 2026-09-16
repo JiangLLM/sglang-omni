@@ -197,7 +197,7 @@ class AbortMessage:
 
     request_id: str
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, Any]:
         return {"type": "abort", "request_id": self.request_id}
 
     @classmethod
@@ -325,7 +325,7 @@ class ProfilerStartMessage:
     event_dir: str | None = None  # Per-stage JSONL event sink dir for request profiling
     enable_torch: bool = True  # When False, only request-level events are captured
 
-    def to_dict(self) -> dict[str, str | bool | None]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "type": "profiler_start",
             "run_id": self.run_id,
@@ -350,7 +350,7 @@ class ProfilerStopMessage:
 
     run_id: str | None = None
 
-    def to_dict(self) -> dict[str, str | None]:
+    def to_dict(self) -> dict[str, Any]:
         return {"type": "profiler_stop", "run_id": self.run_id}
 
     @classmethod
