@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict, TypeVar
 
 import torch
 import xxhash
@@ -37,6 +37,22 @@ MM_AGGREGATE_STAGE = "mm_aggregate"
 
 # Note(Chenchen Hong): PyTorch sampling_seed must fit a positive int32.
 MAX_INT32_POSITIVE = 0x7FFFFFFF
+
+_ValueT = TypeVar("_ValueT")
+
+
+class _OptionalTalkerSamplingConfig(TypedDict, total=False):
+    seed: int | None
+
+
+class _TalkerSamplingConfig(_OptionalTalkerSamplingConfig):
+    max_new_tokens: int
+    temperature: float
+    top_k: int
+    top_p: float
+    repetition_penalty: float
+    codec_eos_id: int | None
+    suppress_tokens: list[int]
 
 
 def _resolve_seed(params: dict[str, Any]) -> int | None:
@@ -368,10 +384,10 @@ def _copy_mutable_containers(value: Any) -> Any:
 
 
 def _select_encoder_inputs(
-    encoder_inputs: dict[str, dict[str, Any]],
+    encoder_inputs: dict[str, dict[str, _ValueT]],
     *,
     stage_name: str,
-) -> dict[str, dict[str, Any]]:
+) -> dict[str, dict[str, _ValueT]]:
     stage_inputs = encoder_inputs.get(stage_name)
     if not isinstance(stage_inputs, dict):
         return {}
@@ -379,13 +395,13 @@ def _select_encoder_inputs(
 
 
 def _project_encoder_input_metadata(
-    encoder_inputs: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    projected: dict[str, dict[str, Any]] = {}
+    encoder_inputs: dict[str, dict[str, _ValueT]],
+) -> dict[str, dict[str, _ValueT | bool]]:
+    projected: dict[str, dict[str, _ValueT | bool]] = {}
     for stage_name, stage_inputs in encoder_inputs.items():
         if not isinstance(stage_inputs, dict):
             continue
-        stage_metadata: dict[str, Any] = {}
+        stage_metadata: dict[str, _ValueT | bool] = {}
         cache_key = stage_inputs.get("cache_key")
         if cache_key is not None:
             stage_metadata["cache_key"] = cache_key
@@ -443,10 +459,10 @@ def _has_encoder_model_input(stage_name: str, stage_inputs: Any) -> bool:
 
 
 def _select_present_fields(
-    source: dict[str, Any],
+    source: dict[str, _ValueT],
     keys: tuple[str, ...],
-) -> dict[str, Any]:
-    selected: dict[str, Any] = {}
+) -> dict[str, _ValueT]:
+    selected: dict[str, _ValueT] = {}
     for key in keys:
         value = source.get(key)
         if value is not None:
@@ -516,7 +532,7 @@ def _compute_mrope_positions(
     input_ids: torch.Tensor,
     model_inputs: dict[str, Any],
     thinker_config: Any,
-) -> torch.Tensor | None:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute M-RoPE positions for multimodal inputs."""
     from sglang_omni.models.qwen3_omni.mrope_positions import (
         get_rope_index_qwen3_omni_vectorized,
@@ -995,7 +1011,10 @@ def make_thinker_scheduler_adapters(
     vocab_size: int,
     thinker_config: Any = None,
     stage_name: str = "thinker",
-):
+) -> tuple[
+    Callable[[StagePayload], SGLangARRequestData],
+    Callable[[SGLangARRequestData], StagePayload],
+]:
     """Build model-specific StagePayload <-> scheduler adapters for thinker."""
 
     def request_builder(payload: StagePayload) -> SGLangARRequestData:
@@ -1075,7 +1094,9 @@ def make_talker_scheduler_adapters(
         speaker_map=speaker_map,
     )
 
-    def _resolve_talker_sampling_config(params: dict[str, Any]) -> dict[str, Any]:
+    def _resolve_talker_sampling_config(
+        params: dict[str, Any],
+    ) -> _TalkerSamplingConfig:
         codec_eos_id = int(getattr(model.config, "codec_eos_token_id", -1))
         suppress_tokens = [
             token_id
@@ -1134,7 +1155,7 @@ def _build_talker_request_data(
     image_token_id: int | None,
     video_token_id: int | None,
     thinker_config: Any,
-    resolve_sampling_config: Callable[[dict[str, Any]], dict[str, Any]],
+    resolve_sampling_config: Callable[[dict[str, Any]], _TalkerSamplingConfig],
 ) -> SGLangARRequestData:
     params = payload.request.params
     sampling_cfg = resolve_sampling_config(params)
