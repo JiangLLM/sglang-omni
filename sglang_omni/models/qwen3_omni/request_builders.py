@@ -513,7 +513,7 @@ def _extract_thinker_model_inputs(
 def build_thinker_request(
     state: Qwen3OmniPipelineState,
     *,
-    params: dict[str, Any],
+    params: dict[str, _ValueT],
 ) -> ARRequestData:
     prompt = state.prompt
     input_ids = prompt["input_ids"]
