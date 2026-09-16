@@ -21,6 +21,7 @@ from sglang_omni.utils.gpu_memory import (
 
 _IndexDevice = TypeVar("_IndexDevice", bound=Mapping[str, object])
 _UuidDevice = TypeVar("_UuidDevice", bound=Mapping[str, object])
+_InventoryDevice = TypeVar("_InventoryDevice", bound=Mapping[str, object])
 
 
 class _BackendInfo(TypedDict):
@@ -163,7 +164,7 @@ def _cuda_runtime_version() -> str | None:
 
 
 def _nvml_inventory(
-    pynvml: Any | None,
+    pynvml: object,
 ) -> tuple[list[dict[str, int | str | None]], dict[str, str | None], list[str]]:
     system: dict[str, str | None] = {
         "driver_version": None,
@@ -279,7 +280,7 @@ def _physical_device(
 def _logical_devices(
     torch: Any,
     visible_devices: list[int | str],
-    inventory: list[dict[str, Any]],
+    inventory: list[_InventoryDevice],
     warnings: list[str],
 ) -> list[dict[str, Any]]:
     if not torch.cuda.is_available():
@@ -341,7 +342,7 @@ def collect_gpu_diagnostics(
     *,
     env: Mapping[str, str] | None = None,
     torch_module: Any | None = None,
-    pynvml_module: Any | None = None,
+    pynvml_module: object = None,
 ) -> dict[str, Any]:
     """Collect diagnostics without loading model configuration or weights."""
 
