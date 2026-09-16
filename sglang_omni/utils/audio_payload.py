@@ -3,14 +3,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
 import numpy as np
 import torch
 from numpy.typing import ArrayLike
 
 
-def audio_data_uri_from_reference(reference: dict[str, Any]) -> str | None:
+_ReferenceValueT = TypeVar("_ReferenceValueT")
+
+
+def audio_data_uri_from_reference(reference: dict[str, _ReferenceValueT]) -> str | None:
     data = reference.get("data")
     if data is None:
         return None
@@ -43,7 +46,7 @@ def audio_waveform_payload(
             f"Unsupported {source_hint} audio output type: {type(audio)}"
         ) from exc
     array = np.ascontiguousarray(array)
-    payload: dict[str, Any] = {
+    payload: dict[str, bytes | list[int] | str | int] = {
         "audio_waveform": array.tobytes(),
         "audio_waveform_shape": list(array.shape),
         "audio_waveform_dtype": "float32",

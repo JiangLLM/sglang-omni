@@ -55,7 +55,7 @@ def build_stream_vocoder_chunk(
     stream_followup_stride: int,
     stream_overlap_tokens: int,
     stream_crossfade_samples: int,
-) -> dict[str, Any] | None:
+) -> dict[str, bytes | list[int] | str | int] | None:
     assert codes.ndim == 2
 
     state.codes.append(
@@ -89,7 +89,7 @@ def flush_stream_vocoder_chunk(
     device: torch.device,
     stream_overlap_tokens: int,
     stream_crossfade_samples: int,
-) -> dict[str, Any] | None:
+) -> dict[str, bytes | list[int] | str | int] | None:
     pending_tail = state.pending_tail
     has_codes = bool(state.codes)
     has_pending_tail = pending_tail is not None and pending_tail.numel() > 0
@@ -124,7 +124,7 @@ def _build_stream_vocoder_chunk(
     stream_overlap_tokens: int,
     stream_crossfade_samples: int,
     is_final: bool,
-) -> dict[str, Any] | None:
+) -> dict[str, bytes | list[int] | str | int] | None:
     if not state.codes:
         return None
 
@@ -265,7 +265,7 @@ def trim_retained_stream_codes(
 
 def _build_audio_chunk_payload(
     audio_data: torch.Tensor, *, sample_rate: int
-) -> dict[str, Any]:
+) -> dict[str, bytes | list[int] | str | int]:
     return audio_waveform_payload(
         audio_data,
         sample_rate=sample_rate,
@@ -288,7 +288,7 @@ class S2ProVocoderScheduler(StreamingSimpleScheduler):
         stream_crossfade_samples: int = 512,
         max_batch_size: int = 8,
         max_batch_wait_ms: int = 2,
-    ):
+    ) -> None:
         if stream_stride <= 0 or stream_followup_stride <= 0 or max_batch_size <= 0:
             raise ValueError(
                 "stream_stride, stream_followup_stride, and max_batch_size must be > 0"
