@@ -53,7 +53,7 @@ class MingOmniPipelineState:
     stream_state: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: Any) -> "MingOmniPipelineState":
+    def from_dict(cls, data: object) -> "MingOmniPipelineState":
         if not isinstance(data, dict):
             data = {}
         mm_inputs = data.get("mm_inputs")

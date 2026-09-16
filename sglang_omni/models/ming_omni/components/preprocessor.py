@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from collections.abc import Awaitable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -26,6 +27,13 @@ from sglang_omni.preprocessing.video import (
     ensure_video_list_async,
 )
 from sglang_omni.proto import StagePayload
+
+if TYPE_CHECKING:
+    from transformers import Qwen2VLImageProcessor
+    from transformers.models.qwen2_vl.video_processing_qwen2_vl import (
+        Qwen2VLVideoProcessor,
+    )
+
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +186,7 @@ def _inject_top_level_audios(
     audio interpretation on the task description.
     """
     messages = list(messages)
-    audio_items: list[dict[str, Any]] = [
+    audio_items: list[dict[str, str | dict[str, str]]] = [
         {"type": "audio_url", "audio_url": {"url": url}} for url in audios
     ]
     for idx, msg in enumerate(messages):
@@ -206,7 +214,7 @@ def _inject_top_level_videos(
     can condition the video interpretation on the user's instruction.
     """
     messages = list(messages)
-    video_items: list[dict[str, Any]] = [
+    video_items: list[dict[str, str | dict[str, str]]] = [
         {"type": "video_url", "video_url": {"url": url}} for url in videos
     ]
     for idx, msg in enumerate(messages):
@@ -234,7 +242,7 @@ class MingPreprocessor:
     - Placeholder token insertion for audio/image segments
     """
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str) -> None:
         self._model_path = model_path
         self._config = load_ming_config(model_path)
         self._tokenizer = load_ming_tokenizer(model_path)
@@ -254,10 +262,10 @@ class MingPreprocessor:
             self._video_patch_id = self._tokenizer.convert_tokens_to_ids(VIDEO_PATCH)
 
         # Lazy-init vision processors
-        self._image_processor = None
-        self._video_processor = None
+        self._image_processor: Qwen2VLImageProcessor | None = None
+        self._video_processor: Qwen2VLVideoProcessor | None = None
 
-    def _get_image_processor(self):
+    def _get_image_processor(self) -> Qwen2VLImageProcessor:
         """Lazy-init Qwen2VLImageProcessor (same processor as Ming-Omni uses)."""
         if self._image_processor is None:
             from transformers import Qwen2VLImageProcessor
@@ -272,7 +280,7 @@ class MingPreprocessor:
             )
         return self._image_processor
 
-    def _get_video_processor(self):
+    def _get_video_processor(self) -> Qwen2VLVideoProcessor:
         """Lazy-init the video processor from the pinned Transformers version."""
         if self._video_processor is None:
             from transformers import Qwen2VLVideoProcessor
@@ -476,7 +484,7 @@ class MingPreprocessor:
         )
 
         # Gather all loads concurrently
-        all_tasks: list[Any] = []
+        all_tasks: list[Awaitable[Any]] = []
         if image_coro is not None:
             all_tasks.append(image_coro)
         if video_coro is not None:
@@ -609,7 +617,7 @@ class MingPreprocessor:
         has_image = pixel_values is not None and image_grid_thw is not None
         has_video = pixel_values_videos is not None and video_grid_thw is not None
         if has_image or has_video:
-            stage_inputs: dict[str, Any] = {}
+            stage_inputs: dict[str, torch.Tensor | str | None] = {}
             if has_image:
                 stage_inputs["pixel_values"] = pixel_values
                 stage_inputs["image_grid_thw"] = image_grid_thw
@@ -678,7 +686,7 @@ class MingPreprocessor:
             )
             text_buffer.clear()
 
-        def append_text(text: Any) -> None:
+        def append_text(text: object) -> None:
             value = str(text)
             if not value:
                 return
