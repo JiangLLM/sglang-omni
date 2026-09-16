@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 import torch
+from numpy.typing import ArrayLike
 
 
 def audio_data_uri_from_reference(reference: dict[str, Any]) -> str | None:
@@ -18,7 +19,7 @@ def audio_data_uri_from_reference(reference: dict[str, Any]) -> str | None:
 
 
 def audio_waveform_payload(
-    audio: Any,
+    audio: ArrayLike | torch.Tensor,
     *,
     sample_rate: int | None = None,
     modality: str | None = None,
