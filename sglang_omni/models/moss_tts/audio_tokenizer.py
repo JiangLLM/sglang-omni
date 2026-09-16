@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, TypeVar
 
 import torch
 import torch.nn.functional as F
@@ -48,6 +48,8 @@ from sglang_omni.models.weight_loader import (
 from sglang_omni.utils.json import JsonValue
 
 logger = logging.getLogger(__name__)
+
+_MossAudioPathT = TypeVar("_MossAudioPathT", bound=str | PathLike[str])
 
 DEFAULT_MOSS_TTS_AUDIO_TOKENIZER = "OpenMOSS-Team/MOSS-Audio-Tokenizer"
 DEFAULT_MOSS_TTS_LOCAL_AUDIO_TOKENIZER = "OpenMOSS-Team/MOSS-Audio-Tokenizer-v2"
@@ -1544,7 +1546,7 @@ class MossAudioEncoder:
 
     def encode_paths(
         self,
-        paths: list[str | PathLike[str]],
+        paths: list[_MossAudioPathT],
         *,
         num_quantizers: int,
     ) -> list[torch.Tensor]:
@@ -1557,7 +1559,7 @@ class MossAudioEncoder:
 
     def load_paths(
         self,
-        paths: list[str | PathLike[str]],
+        paths: list[_MossAudioPathT],
     ) -> list[tuple[torch.Tensor, int]]:
         import torchaudio
 
