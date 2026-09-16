@@ -102,7 +102,7 @@ def make_arkasr_scheduler_adapters(
     audio_encoder_service: Any = None,
 ) -> tuple[
     Callable[[StagePayload], ArkASRRequestData | DeferredAdmission],
-    Callable[[Any], StagePayload],
+    Callable[[ArkASRRequestData], StagePayload],
 ]:
     if feature_extractor is None:
         raise ValueError("ARK-ASR processor is missing a feature_extractor")

@@ -156,7 +156,8 @@ def make_whisper_scheduler_adapters(
     decoder_context_len: int | None = None,
     audio_encoder_service: Any | None = None,
 ) -> tuple[
-    Callable[[StagePayload], WhisperASRRequestData], Callable[[Any], StagePayload]
+    Callable[[StagePayload], WhisperASRRequestData],
+    Callable[[WhisperASRRequestData], StagePayload],
 ]:
     logit_bias = _build_logit_bias(generation_config)
     # note (Dayuxiaoshui): set_prefix_tokens mutates shared tokenizer state
