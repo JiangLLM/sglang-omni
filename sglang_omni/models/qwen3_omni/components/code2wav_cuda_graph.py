@@ -18,7 +18,6 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, TypedDict
 
 import torch
-from typing_extensions import NotRequired
 
 from sglang_omni.platforms import current_platform
 
@@ -39,16 +38,19 @@ class _Tier1Stats(TypedDict):
     per_key_footprint_bytes: dict[str, int]
 
 
-class _MemoryStats(TypedDict):
+class _MemoryStatsRequired(TypedDict):
     total_gpu_memory_fraction: float | None
-    tier1: NotRequired[_Tier1Stats]
-    before: NotRequired[dict[str, int]]
-    after: NotRequired[dict[str, int]]
-    after_rollback: NotRequired[dict[str, int]]
-    stage_budget_bytes: NotRequired[int]
-    loaded_model_footprint_bytes: NotRequired[int]
-    graph_budget_bytes: NotRequired[int]
-    graph_footprint_bytes: NotRequired[int]
+
+
+class _MemoryStats(_MemoryStatsRequired, total=False):
+    tier1: _Tier1Stats
+    before: dict[str, int]
+    after: dict[str, int]
+    after_rollback: dict[str, int]
+    stage_budget_bytes: int
+    loaded_model_footprint_bytes: int
+    graph_budget_bytes: int
+    graph_footprint_bytes: int
 
 
 class _BindingStats(TypedDict):
