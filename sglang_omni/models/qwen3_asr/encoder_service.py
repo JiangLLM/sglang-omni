@@ -470,7 +470,7 @@ class Qwen3ASRPreLMEncoderService(
 
     def cache_embedding(
         self,
-        item: MultimodalDataItem,
+        item: object,
         embedding: torch.Tensor,
         host_copy: torch.Tensor | None = None,
     ) -> None:
