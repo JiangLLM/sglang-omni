@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
+from sglang.srt.managers.schedule_batch import NextBatchPlan, Req, ScheduleBatch
+
+from sglang_omni.proto import StagePayload
 from sglang_omni.scheduling.omni_scheduler import OmniScheduler
 
 from .sglang_request_builder import cfg_uncond_rid, is_cfg_uncond_rid
@@ -15,7 +19,7 @@ class MiniMaxMusic3Scheduler(OmniScheduler):
 
     def _enqueue_built_request(
         self,
-        payload: Any,
+        payload: StagePayload,
         pending_stream_done: bool,
         req_data: Any,
         *,
@@ -47,7 +51,7 @@ class MiniMaxMusic3Scheduler(OmniScheduler):
         req._omni_data = uncond
         self.waiting_queue.append(req)
 
-    def get_new_batch_prefill(self, running_batch: Any) -> Any:
+    def get_new_batch_prefill(self, running_batch: ScheduleBatch) -> NextBatchPlan:
         queue = self.waiting_queue
         limit = self._pair_admission_limit(queue, running_batch)
         if limit >= len(queue):
@@ -59,7 +63,9 @@ class MiniMaxMusic3Scheduler(OmniScheduler):
         finally:
             self.waiting_queue.extend(deferred)
 
-    def _pair_admission_limit(self, queue: list, running_batch: Any) -> int:
+    def _pair_admission_limit(
+        self, queue: list[Req], running_batch: ScheduleBatch
+    ) -> int:
         """How many leading queue entries the adder may see, always whole pairs."""
         allocatable = int(self.get_num_allocatable_reqs(len(running_batch.reqs)))
         limit = min(len(queue), max(0, allocatable))
@@ -76,7 +82,10 @@ class MiniMaxMusic3Scheduler(OmniScheduler):
         return limit
 
     def stream_output(
-        self, reqs: Any, return_logprob: bool = False, skip_req: Any = None
+        self,
+        reqs: Iterable[Req],
+        return_logprob: bool = False,
+        skip_req: object = None,
     ) -> None:
         conditioned = []
         for req in reqs:
@@ -96,7 +105,7 @@ class MiniMaxMusic3Scheduler(OmniScheduler):
         )
 
     @staticmethod
-    def _is_cfg_uncond(req: Any) -> bool:
+    def _is_cfg_uncond(req: object) -> bool:
         data = getattr(req, "_omni_data", None)
         return data is not None and data.is_cfg_uncond
 
