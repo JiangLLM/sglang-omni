@@ -8,7 +8,7 @@ import base64
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import torch
 import xxhash
@@ -40,6 +40,23 @@ from sglang_omni.profiler.event_recorder import emit as _emit_event
 from sglang_omni.proto import StagePayload
 
 logger = logging.getLogger(__name__)
+
+
+class _VideoProcessorKwargs(TypedDict, total=False):
+    fps: float | list[float]
+    max_frames: int
+    min_pixels: int
+    max_pixels: int
+    total_pixels: int
+    use_audio_in_video: bool
+    seconds_per_chunk: float
+    position_id_per_seconds: float
+    device: str
+
+
+class _ProcessorKwargs(TypedDict, total=False):
+    videos_kwargs: _VideoProcessorKwargs
+
 
 _TRAIN_INPUT_TENSOR_NAMES = frozenset(
     {
@@ -108,7 +125,7 @@ def _extra_special_tokens_compat(model_dir: str) -> dict[str, str]:
     }
 
 
-def _contextualize_cache_key(base_key: str | None, **context: Any) -> str | None:
+def _contextualize_cache_key(base_key: str | None, **context: object) -> str | None:
     if base_key is None:
         return None
     parts = [base_key]
@@ -159,7 +176,7 @@ def validate_prompt_seq_len(
         )
 
 
-def _is_pretokenized_prompt(inputs: Any) -> bool:
+def _is_pretokenized_prompt(inputs: object) -> bool:
     """True when a rollout request carries pre-tokenized prompt ids.
 
     Miles RL rollout sends the exact prompt token ids it trains on, so those
@@ -186,7 +203,7 @@ class Qwen3OmniPreprocessor:
         video_min_pixels: int | None = None,
         video_max_pixels: int | None = None,
         video_total_pixels: int | None = None,
-    ):
+    ) -> None:
         self.model_path = model_path
         self.max_seq_len = max_seq_len
         self.default_video_fps = float(video_fps) if video_fps is not None else None
@@ -379,12 +396,12 @@ class Qwen3OmniPreprocessor:
             request_id=payload.request_id,
         )
 
-        full_mm_inputs: dict[str, Any] = {
+        full_mm_inputs: dict[str, dict[str, torch.Tensor | None]] = {
             "image": build_image_mm_inputs(flat_inputs),
             "audio": build_audio_mm_inputs(flat_inputs),
             "video": build_video_mm_inputs(flat_inputs),
         }
-        image_encoder_inputs = {
+        image_encoder_inputs: dict[str, torch.Tensor | str | None] = {
             name: value
             for name, value in {
                 **full_mm_inputs["image"],
@@ -392,7 +409,7 @@ class Qwen3OmniPreprocessor:
             }.items()
             if value is not None
         }
-        audio_encoder_inputs = {
+        audio_encoder_inputs: dict[str, torch.Tensor | str | None] = {
             name: value
             for name, value in full_mm_inputs["audio"].items()
             if value is not None
@@ -409,8 +426,7 @@ class Qwen3OmniPreprocessor:
             )
         if audio_encoder_inputs and not has_audio_payload:
             raise ValueError(
-                "multimodal_train_inputs provides audio metadata "
-                "without input_features"
+                "multimodal_train_inputs provides audio metadata without input_features"
             )
         if processed_cache_key is not None:
             if image_encoder_inputs:
@@ -613,7 +629,7 @@ class Qwen3OmniPreprocessor:
             tokenize=False,
         )
 
-        videos_kwargs: dict[str, Any] = {}
+        videos_kwargs: _VideoProcessorKwargs = {}
         if sampled_video_fps is not None:
             videos_kwargs["fps"] = (
                 sampled_video_fps[0]
@@ -641,7 +657,7 @@ class Qwen3OmniPreprocessor:
         if videos:
             # torchcodec backend expects a non-None device string
             videos_kwargs.setdefault("device", "cpu")
-        processor_kwargs: dict[str, Any] = {}
+        processor_kwargs: _ProcessorKwargs = {}
         if videos_kwargs:
             processor_kwargs["videos_kwargs"] = videos_kwargs
 
