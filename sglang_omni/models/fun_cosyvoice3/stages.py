@@ -6,9 +6,10 @@ from __future__ import annotations
 import importlib
 import logging
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -22,6 +23,10 @@ if TYPE_CHECKING:
     from cosyvoice.flow.flow_matching import ConditionalCFM
 
     from sglang_omni.models.fun_cosyvoice3.mlx.vocoder import FunCosyVoice3MlxVocoder
+    from sglang_omni.models.fun_cosyvoice3.streaming_vocoder import (
+        FunCosyVoice3StreamingVocoderScheduler,
+    )
+    from sglang_omni.scheduling.omni_scheduler import OmniScheduler
 
 from sglang_omni.models.fun_cosyvoice3.config import reject_conflicting_dit_accelerators
 from sglang_omni.models.fun_cosyvoice3.flow_estimator_trt import (
@@ -757,7 +762,7 @@ class FunCosyVoice3Flow:
     def __getattr__(self, name: str) -> Any:
         return getattr(self.flow, name)
 
-    def parameters(self):
+    def parameters(self) -> Iterator[torch.nn.Parameter]:
         return self.flow.parameters()
 
     def to(self, *args: Any, **kwargs: Any) -> "FunCosyVoice3Flow":
@@ -1017,7 +1022,7 @@ def load_cosyvoice3_flow_hift_lightweight(
     checkpoint_dir: str,
     *,
     device: str,
-) -> tuple[Any, Any]:
+) -> tuple[FunCosyVoice3Flow, Any]:
     """Load only Flow and HiFT for CPU/MPS without constructing a second LLM."""
     try:
         from hyperpyyaml import load_hyperpyyaml
@@ -1096,7 +1101,7 @@ def load_cosyvoice3_mlx_vocoder(
     )
 
 
-def get_mlx_core() -> Any:
+def get_mlx_core() -> ModuleType:
     import mlx.core as mx
 
     return mx
@@ -1219,7 +1224,7 @@ def create_sglang_tts_engine_executor(
     server_args_overrides: dict[str, Any] | None = None,
     onnx_intra_op_threads: int = 16,
     token_hop_len: int = TOKEN_HOP_LEN,
-) -> Any:
+) -> OmniScheduler:
     from sglang_omni.models.fun_cosyvoice3.engine_builder import (
         FunCosyVoice3EngineBuilder,
     )
@@ -1948,16 +1953,21 @@ class FunCosyVoice3MlxStreamingVocoderScheduler(
         request_id: str,
         payload: StagePayload,
         state: FunCosyVoice3MlxStreamState,
-    ) -> dict[str, Any]:
+    ) -> dict[str, str | int | dict[str, int | float]]:
         del request_id, state
         pipeline_state = FunCosyVoice3State.from_dict(payload.data)
-        result = {"modality": "audio", "sample_rate": self.sample_rate}
+        result: dict[str, str | int | dict[str, int | float]] = {
+            "modality": "audio",
+            "sample_rate": self.sample_rate,
+        }
         usage = build_usage(pipeline_state)
         if usage is not None:
             result["usage"] = usage
         return result
 
-    def stream_payload(self, request_id: str, waveform: torch.Tensor) -> dict[str, Any]:
+    def stream_payload(
+        self, request_id: str, waveform: torch.Tensor
+    ) -> dict[str, bytes | list[int] | str | int]:
         del request_id
         return audio_waveform_payload(
             waveform,
@@ -1998,7 +2008,7 @@ def create_vocoder_executor(
     disable_hop_growth: bool = False,
     mlx_model_path: str | None = None,
     mlx_model_revision: str | None = None,
-) -> Any:
+) -> FunCosyVoice3StreamingVocoderScheduler | FunCosyVoice3MlxStreamingVocoderScheduler:
     from sglang_omni.models.fun_cosyvoice3.streaming_vocoder import (
         FunCosyVoice3StreamingVocoderScheduler,
     )
