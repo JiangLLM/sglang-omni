@@ -9,7 +9,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, TypedDict, TypeVar
 
 from sglang_omni.utils.gpu_memory import (
     _decode_nvml_string,
@@ -18,6 +18,21 @@ from sglang_omni.utils.gpu_memory import (
     format_bytes_gib,
     parse_cuda_visible_devices,
 )
+
+_IndexDevice = TypeVar("_IndexDevice", bound=Mapping[str, object])
+_UuidDevice = TypeVar("_UuidDevice", bound=Mapping[str, object])
+
+
+class _BackendInfo(TypedDict):
+    category: str
+    name: str
+    distribution: str | None
+    version: str | None
+    module: str
+    installed: bool
+    importable: bool
+    reason: str | None
+
 
 _BACKENDS = (
     ("attention", "flash-attn-4", "flash_attn.cute"),
@@ -46,7 +61,7 @@ def _cuda_version(value: int | None) -> str | None:
     return f"{value // 1000}.{(value % 1000) // 10}"
 
 
-def _normalize_uuid(value: Any) -> str | None:
+def _normalize_uuid(value: object) -> str | None:
     normalized = str(value or "").strip().lower()
     return normalized.removeprefix("gpu-") or None
 
@@ -107,8 +122,8 @@ def _distribution_info(module: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _backend_inventory() -> list[dict[str, Any]]:
-    backends = []
+def _backend_inventory() -> list[_BackendInfo]:
+    backends: list[_BackendInfo] = []
     for category, name, module in _BACKENDS:
         import_error = _module_import_error(module)
         distribution, version = _distribution_info(module)
@@ -149,9 +164,12 @@ def _cuda_runtime_version() -> str | None:
 
 def _nvml_inventory(
     pynvml: Any | None,
-) -> tuple[list[dict[str, Any]], dict[str, str | None], list[str]]:
-    system = {"driver_version": None, "cuda_driver_api_version": None}
-    inventory: list[dict[str, Any]] = []
+) -> tuple[list[dict[str, int | str | None]], dict[str, str | None], list[str]]:
+    system: dict[str, str | None] = {
+        "driver_version": None,
+        "cuda_driver_api_version": None,
+    }
+    inventory: list[dict[str, int | str | None]] = []
     warnings: list[str] = []
     if pynvml is None:
         return inventory, system, warnings
@@ -190,7 +208,7 @@ def _nvml_inventory(
             )
             continue
 
-        device = {
+        device: dict[str, int | str | None] = {
             "physical_index": physical_index,
             "uuid": None,
             "pci_bus_id": None,
@@ -205,8 +223,7 @@ def _nvml_inventory(
             device["free_memory_bytes"] = int(memory.free)
         except Exception as exc:
             warnings.append(
-                f"NVML memory query failed for physical_index="
-                f"{physical_index}: {exc}"
+                f"NVML memory query failed for physical_index={physical_index}: {exc}"
             )
         try:
             pci = pynvml.nvmlDeviceGetPciInfo(handle)
@@ -241,11 +258,11 @@ def _nvml_inventory(
 
 def _physical_device(
     logical_index: int,
-    properties: Any | None,
+    properties: object,
     visible_devices: list[int | str],
-    by_index: dict[int, dict[str, Any]],
-    by_uuid: dict[str, dict[str, Any]],
-) -> dict[str, Any]:
+    by_index: dict[int, _IndexDevice],
+    by_uuid: dict[str, _UuidDevice],
+) -> _IndexDevice | _UuidDevice | dict[str, None]:
     torch_uuid = _normalize_uuid(getattr(properties, "uuid", None))
     if torch_uuid in by_uuid:
         return by_uuid[torch_uuid]
