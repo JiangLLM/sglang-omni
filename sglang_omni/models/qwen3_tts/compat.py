@@ -5,9 +5,22 @@ from __future__ import annotations
 
 import inspect
 import threading
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any, ParamSpec, Protocol, TypeVar, overload
 
 import torch
+
+_Params = ParamSpec("_Params")
+_Result = TypeVar("_Result")
+_DecoratedParams = ParamSpec("_DecoratedParams")
+_DecoratedResult = TypeVar("_DecoratedResult")
+
+
+class _ModelInputsDecorator(Protocol):
+    def __call__(
+        self, inner: Callable[_Params, _Result]
+    ) -> Callable[_Params, _Result]: ...
+
 
 _APPLY_LOCK = threading.Lock()
 _PATCHED_FLAG = "_sglang_omni_qwen_tts_compat_patched"
@@ -46,9 +59,9 @@ def _compute_default_rope_parameters(
 
 
 def _make_mask_factory_compat(
-    original: Callable[..., Any], name: str
-) -> Callable[..., Any]:
-    def mask_factory_compat(*args: Any, **kwargs: Any) -> Any:
+    original: Callable[..., _Result], name: str
+) -> Callable[..., _Result]:
+    def mask_factory_compat(*args: Any, **kwargs: Any) -> _Result:
         if "input_embeds" in kwargs:
             kwargs.setdefault("inputs_embeds", kwargs.pop("input_embeds"))
         kwargs.pop("cache_position", None)
@@ -113,12 +126,24 @@ def apply_qwen_tts_transformers_compatibility_patches() -> None:
 
         original = current
 
+        @overload
         def check_model_inputs_compat(
-            func: Callable[..., Any] | None = None,
-        ) -> Callable[..., Any]:
+            func: Callable[_Params, _Result],
+        ) -> Callable[_Params, _Result]: ...
+
+        @overload
+        def check_model_inputs_compat(
+            func: None = None,
+        ) -> _ModelInputsDecorator: ...
+
+        def check_model_inputs_compat(
+            func: Callable[_Params, _Result] | None = None,
+        ) -> Callable[_Params, _Result] | _ModelInputsDecorator:
             if func is None:
 
-                def decorator(inner: Callable[..., Any]) -> Callable[..., Any]:
+                def decorator(
+                    inner: Callable[_DecoratedParams, _DecoratedResult],
+                ) -> Callable[_DecoratedParams, _DecoratedResult]:
                     return original(inner)
 
                 return decorator
