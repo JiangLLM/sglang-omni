@@ -6,14 +6,20 @@ from __future__ import annotations
 import asyncio
 import base64
 import struct
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 import numpy.typing as npt
 import torch
 
 from .base import MediaIO, _is_url
+
+if TYPE_CHECKING:
+    from .resource_connector import MultiModalResourceConnector
+
+_AudioInputT = TypeVar("_AudioInputT")
 
 
 def _decode_audio_bytes_av(data: bytes) -> tuple[npt.NDArray[np.float32], int]:
@@ -199,7 +205,7 @@ async def ensure_audio_list_async(
     audios: Any,
     *,
     target_sr: int = 16000,
-    resource_connector: Any | None = None,
+    resource_connector: MultiModalResourceConnector | None = None,
 ) -> list[Any]:
     """Asynchronously normalize audio inputs into a list.
 
@@ -223,7 +229,7 @@ async def ensure_audio_list_async(
         resource_connector = get_global_resource_connector()
 
     # Collect coroutines for URL items
-    coroutines: list[asyncio.Task[tuple[npt.NDArray[np.float32], float]] | None] = []
+    coroutines: list[asyncio.Task[tuple[npt.NDArray[np.float32], float]]] = []
     url_indices: list[int] = []
     normalized: list[Any] = []
 
@@ -256,7 +262,9 @@ async def ensure_audio_list_async(
     return normalized
 
 
-def build_audio_mm_inputs(hf_inputs: dict[str, Any]) -> dict[str, Any]:
+def build_audio_mm_inputs(
+    hf_inputs: Mapping[str, _AudioInputT],
+) -> dict[str, _AudioInputT | torch.Tensor | None]:
     """Extract standard audio tensors from HF processor outputs."""
     feature_attention_mask = hf_inputs.get("feature_attention_mask")
     audio_feature_lengths = hf_inputs.get("audio_feature_lengths")
@@ -273,7 +281,7 @@ def build_audio_mm_inputs(hf_inputs: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def compute_audio_cache_key(audios: Any) -> str | None:
+def compute_audio_cache_key(audios: object) -> str | None:
     """Compute cache key from raw audio inputs (paths, numpy arrays).
 
     This should be called BEFORE ensure_audio_list() to capture original
