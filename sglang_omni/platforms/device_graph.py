@@ -9,10 +9,22 @@ choice belongs on the platform rather than in a per-model branch.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
-from typing import Any, Iterator, Protocol
+from typing import Any, Literal, Protocol, TypedDict
 
 import torch
+
+
+class _CudaCaptureKwargs(TypedDict, total=False):
+    pool: torch.cuda._POOL_HANDLE
+    stream: torch.cuda.Stream
+    capture_error_mode: Literal["thread_local"]
+
+
+class _XpuCaptureKwargs(TypedDict, total=False):
+    pool: torch.xpu._POOL_HANDLE
+    stream: torch.xpu.Stream
 
 
 class DeviceGraphBackend(Protocol):
@@ -36,12 +48,12 @@ class CudaDeviceGraphBackend:
     def capture(
         self,
         *,
-        pool: Any | None = None,
-        stream: Any | None = None,
+        pool: torch.cuda._POOL_HANDLE | None = None,
+        stream: torch.cuda.Stream | None = None,
         thread_local_errors: bool = False,
-    ) -> Iterator[Any]:
+    ) -> Iterator[torch.cuda.CUDAGraph]:
         graph = torch.cuda.CUDAGraph()
-        kwargs: dict[str, Any] = {}
+        kwargs: _CudaCaptureKwargs = {}
         if pool is not None:
             kwargs["pool"] = pool
         if stream is not None:
@@ -82,15 +94,15 @@ class XpuDeviceGraphBackend:
     def capture(
         self,
         *,
-        pool: Any | None = None,
-        stream: Any | None = None,
+        pool: torch.xpu._POOL_HANDLE | None = None,
+        stream: torch.xpu.Stream | None = None,
         thread_local_errors: bool = False,
-    ) -> Iterator[Any]:
+    ) -> Iterator[torch.xpu.XPUGraph]:
         # Note (siju): XPU's graph context declares no capture_error_mode and
         # rejects it as a TypeError, so the request is dropped, not translated.
         del thread_local_errors
         graph = torch.xpu.XPUGraph()
-        kwargs: dict[str, Any] = {}
+        kwargs: _XpuCaptureKwargs = {}
         if pool is not None:
             kwargs["pool"] = pool
         if stream is not None:
