@@ -15,7 +15,10 @@ from typing import Any, Mapping
 
 import torch
 
-from sglang_omni.models.qwen3_tts.codec_state_arena import Qwen3TTSCodecStateArena
+from sglang_omni.models.qwen3_tts.codec_state_arena import (
+    CodecStateStats,
+    Qwen3TTSCodecStateArena,
+)
 from sglang_omni.models.qwen3_tts.incremental_codec import (
     Qwen3TTSIncrementalCodecState,
     Qwen3TTSIncrementalDecoder,
@@ -1026,7 +1029,7 @@ class Qwen3TTSStreamingVocoderScheduler(
         )
         return initial, window, followups
 
-    def codec_state_stats(self) -> dict[str, Any]:
+    def codec_state_stats(self) -> CodecStateStats:
         """Snapshot of incremental Codec state usage."""
         if self._codec_arena is None:
             return {"enabled": False}

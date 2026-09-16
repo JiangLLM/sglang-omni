@@ -4,10 +4,53 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 import torch
 import torch.nn.functional as F
+
+
+class _CausalConvModule(Protocol):
+    conv: torch.nn.Conv1d
+    padding: int
+
+
+class _AttentionModule(Protocol):
+    head_dim: int
+    num_key_value_groups: int
+    scaling: float
+    sliding_window: int
+    q_proj: torch.nn.Linear
+    k_proj: torch.nn.Linear
+    v_proj: torch.nn.Linear
+    o_proj: torch.nn.Linear
+    q_norm: torch.nn.Identity
+    k_norm: torch.nn.Identity
+
+
+class _ConvNeXtModule(Protocol):
+    @property
+    def dwconv(self) -> _CausalConvModule: ...
+
+    norm: torch.nn.LayerNorm
+    pwconv1: torch.nn.Linear
+    act: torch.nn.GELU
+    pwconv2: torch.nn.Linear
+    gamma: torch.nn.Parameter
+
+
+class _ResidualUnitModule(Protocol):
+    @property
+    def act1(self) -> torch.nn.Module: ...
+
+    @property
+    def conv1(self) -> _CausalConvModule: ...
+
+    @property
+    def act2(self) -> torch.nn.Module: ...
+
+    @property
+    def conv2(self) -> _CausalConvModule: ...
 
 
 @dataclass(frozen=True)
@@ -100,7 +143,7 @@ class Qwen3TTSIncrementalCodecState:
 
 
 def incremental_causal_conv1d(
-    module: Any,
+    module: _CausalConvModule,
     hidden_states: torch.Tensor,
     state: Qwen3TTSIncrementalCodecState,
     key: str,
@@ -203,7 +246,7 @@ def _repeat_kv(hidden_states: torch.Tensor, groups: int) -> torch.Tensor:
 
 
 def _incremental_attention(
-    attention: Any,
+    attention: _AttentionModule,
     hidden_states: torch.Tensor,
     position_embeddings: tuple[torch.Tensor, torch.Tensor],
     state: Qwen3TTSIncrementalCodecState,
@@ -329,7 +372,7 @@ def _incremental_transformer(
 
 
 def _incremental_convnext(
-    module: Any,
+    module: _ConvNeXtModule,
     hidden_states: torch.Tensor,
     state: Qwen3TTSIncrementalCodecState,
     key: str,
@@ -347,7 +390,7 @@ def _incremental_convnext(
 
 
 def _incremental_residual_unit(
-    module: Any,
+    module: _ResidualUnitModule,
     hidden_states: torch.Tensor,
     state: Qwen3TTSIncrementalCodecState,
     key: str,
@@ -482,7 +525,7 @@ class Qwen3TTSIncrementalDecoder:
         conv: list[tuple[str, int, int]] = []
         transconv: list[tuple[str, int, int]] = []
 
-        def add_conv(module: Any, key: str) -> None:
+        def add_conv(module: _CausalConvModule, key: str) -> None:
             conv.append((key, int(module.conv.in_channels), int(module.padding)))
 
         def add_transconv(module: Any, key: str) -> None:
