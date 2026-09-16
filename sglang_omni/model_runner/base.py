@@ -149,7 +149,7 @@ class ModelRunner:
         self,
         bufs_attr: str,
         slot_attr: str,
-        shape: Any,
+        shape: tuple[int, ...] | torch.Size,
         dtype: torch.dtype,
         *,
         realloc_on_grow: bool,
