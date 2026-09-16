@@ -23,7 +23,7 @@ from collections import deque
 from collections.abc import Iterable
 from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import islice
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, TypedDict, TypeVar
 
 import torch
 from sglang.srt.environ import envs
@@ -73,6 +73,8 @@ from sglang_omni.scheduling.types import (
 
 if TYPE_CHECKING:
     from sglang.srt.configs.model_config import ModelConfig
+    from sglang.srt.disaggregation.utils import DisaggregationMode
+    from sglang.srt.hardware_backend.mlx.tp_worker import MlxTpModelWorker
     from sglang.srt.managers.scheduler import GenerationBatchResult
     from sglang.srt.mem_cache.allocator import BaseTokenToKVPoolAllocator
     from sglang.srt.mem_cache.base_prefix_cache import BasePrefixCache
@@ -80,8 +82,22 @@ if TYPE_CHECKING:
     from sglang.srt.server_args import ServerArgs
 
     from sglang_omni.model_runner.base import ModelRunner
+    from sglang_omni.model_runner.model_worker import ModelWorker
 
 logger = logging.getLogger(__name__)
+
+_PayloadValue = TypeVar("_PayloadValue")
+
+
+class _RequiredAdminActionResult(TypedDict):
+    success: bool
+    message: str
+
+
+class _AdminActionResult(_RequiredAdminActionResult, total=False):
+    data: dict[str, Any]
+    error: str | None
+
 
 _FAILED_BATCH_RESULT = object()
 
@@ -113,7 +129,7 @@ def _compact_decode_input_history(data: ARRequestData) -> None:
     data.decode_input_embeds = list(torch.stack(history).unbind(0))
 
 
-def _detach_request_data(req: Any) -> None:
+def _detach_request_data(req: Req) -> None:
     """Break Req -> data; async snapshots retain the one-way data -> Req edge."""
     req._omni_data = None
 
@@ -121,7 +137,7 @@ def _detach_request_data(req: Any) -> None:
 class _NoOpSender:
     """Stub for send_to_detokenizer — stream_output handles emission."""
 
-    def send_output(self, *args, **kwargs):
+    def send_output(self, *args: object, **kwargs: object) -> None:
         pass
 
 
@@ -131,7 +147,7 @@ class _UpstreamAbortSender:
     def __init__(self, scheduler: OmniScheduler) -> None:
         self._scheduler = scheduler
 
-    def send_output(self, msg: Any, req: Any = None) -> None:
+    def send_output(self, msg: object, req: object = None) -> None:
         del req
         if not isinstance(msg, AbortReq):
             raise RuntimeError(
@@ -172,7 +188,7 @@ class _NoOpGrammarManager:
     def get_ready_grammar_requests(self) -> list:
         return []
 
-    def abort_requests(self, recv_req) -> None:
+    def abort_requests(self, recv_req: object) -> None:
         pass
 
     def clear(self) -> None:
@@ -199,7 +215,7 @@ class OmniScheduler:
 
     def __init__(
         self,
-        tp_worker: Any,
+        tp_worker: ModelWorker | MlxTpModelWorker,
         tree_cache: BasePrefixCache,
         req_to_token_pool: ReqToTokenPool,
         token_to_kv_pool_allocator: BaseTokenToKVPoolAllocator,
@@ -540,7 +556,7 @@ class OmniScheduler:
         self._prefill_start_done: set[str] = set()
         self._prefill_end_done: set[str] = set()
 
-    def _initial_disaggregation_mode(self):
+    def _initial_disaggregation_mode(self) -> DisaggregationMode:
         from sglang.srt.disaggregation.utils import DisaggregationMode
 
         return DisaggregationMode.NULL
@@ -712,9 +728,9 @@ class OmniScheduler:
         )
         self.output_streamer = types.SimpleNamespace(
             stream_output=self.stream_output,
-            _stream_output_generation=lambda reqs, return_logprob, **_kwargs: self.stream_output(
-                reqs, return_logprob
-            ),
+            _stream_output_generation=lambda reqs,
+            return_logprob,
+            **_kwargs: self.stream_output(reqs, return_logprob),
         )
         self.init_beam_coordinator()
         self.batch_result_processor = SchedulerBatchResultProcessor(
@@ -779,7 +795,7 @@ class OmniScheduler:
             return types.MethodType(attr, self)
         return attr
 
-    def _init_parallel_state(self, tp_worker: Any) -> None:
+    def _init_parallel_state(self, tp_worker: ModelWorker | MlxTpModelWorker) -> None:
         from sglang.srt.runtime_context import get_parallel
 
         enable_dp_attention = get_parallel().enable_dp_attention
@@ -1327,7 +1343,7 @@ class OmniScheduler:
         return deferred
 
     def _should_recheck_deferred_request_on_stream_chunk(
-        self, request_id: str, chunk: Any
+        self, request_id: str, chunk: object
     ) -> bool:
         del request_id, chunk
         return True
@@ -1906,8 +1922,8 @@ class OmniScheduler:
         self._drain_inbox_for_request(request_id)
 
     def admin(
-        self, action: str, payload: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+        self, action: str, payload: dict[str, _PayloadValue] | None = None
+    ) -> _AdminActionResult:
         payload = dict(payload or {})
         if self._should_enqueue_admin():
             return self._enqueue_admin(action, payload)
@@ -1921,11 +1937,15 @@ class OmniScheduler:
             and threading.get_ident() != scheduler_thread_id
         )
 
-    def _enqueue_admin(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _enqueue_admin(
+        self, action: str, payload: dict[str, Any]
+    ) -> _AdminActionResult:
         timeout_s = float(payload.get("_admin_timeout_s", 300.0))
         queued_payload = dict(payload)
         queued_payload.pop("_admin_timeout_s", None)
-        response_queue = _queue_mod.Queue(maxsize=1)
+        response_queue: _queue_mod.Queue[_AdminActionResult] = _queue_mod.Queue(
+            maxsize=1
+        )
         self._admin_queue.put((action, queued_payload, response_queue))
         try:
             return response_queue.get(timeout=timeout_s)
@@ -1957,8 +1977,8 @@ class OmniScheduler:
         return processed
 
     def _run_admin_action(
-        self, action: str, payload: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+        self, action: str, payload: dict[str, _PayloadValue] | None = None
+    ) -> _AdminActionResult:
         payload = dict(payload or {})
         if action == ADMIN_MODEL_INFO:
             return self._admin_model_info()
@@ -1984,7 +2004,7 @@ class OmniScheduler:
             "data": {"skipped": True, "unsupported": True},
         }
 
-    def _admin_model_info(self) -> dict[str, Any]:
+    def _admin_model_info(self) -> _AdminActionResult:
         info = self.model_worker.model_info()
         with self._request_admission_lock:
             request_build_pending = len(self._pending_request_builds)
@@ -2013,7 +2033,9 @@ class OmniScheduler:
         )
         return {"success": True, "message": "ok", "data": info}
 
-    def _admin_pause_generation(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _admin_pause_generation(
+        self, payload: dict[str, _PayloadValue]
+    ) -> _AdminActionResult:
         mode = str(payload.get("mode") or "abort")
         if mode not in {"abort", "retract", "in_place"}:
             return {
@@ -2041,7 +2063,9 @@ class OmniScheduler:
             },
         }
 
-    def _admin_continue_generation(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _admin_continue_generation(
+        self, payload: dict[str, _PayloadValue]
+    ) -> _AdminActionResult:
         with self._admin_lock:
             if bool(payload.get("torch_empty_cache", True)):
                 self._empty_torch_cache()
@@ -2054,8 +2078,8 @@ class OmniScheduler:
         }
 
     def _admin_update_weights_from_disk(
-        self, payload: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, payload: dict[str, _PayloadValue]
+    ) -> _AdminActionResult:
         return self._run_weight_update_with_lifecycle(
             payload,
             self.model_worker.update_weights_from_disk,
@@ -2068,12 +2092,12 @@ class OmniScheduler:
 
     def _run_weight_update_with_lifecycle(
         self,
-        payload: dict[str, Any],
+        payload: dict[str, _PayloadValue],
         update_fn,
         result_data: dict[str, Any],
         *,
         keep_pause_on_failure: bool = False,
-    ) -> dict[str, Any]:
+    ) -> _AdminActionResult:
         keep_pause = bool(payload.get("keep_pause", False))
         keep_engine_paused = keep_pause
         with self._admin_lock:
@@ -2150,8 +2174,8 @@ class OmniScheduler:
         }
 
     def _admin_update_weights_from_tensor(
-        self, payload: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, payload: dict[str, _PayloadValue]
+    ) -> _AdminActionResult:
         return self._run_weight_update_with_lifecycle(
             payload,
             self.model_worker.update_weights_from_tensor,
@@ -2162,8 +2186,8 @@ class OmniScheduler:
         )
 
     def _admin_update_weights_from_distributed(
-        self, payload: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, payload: dict[str, _PayloadValue]
+    ) -> _AdminActionResult:
         return self._run_weight_update_with_lifecycle(
             payload,
             self.model_worker.update_weights_from_distributed,
@@ -2175,8 +2199,8 @@ class OmniScheduler:
         )
 
     def _admin_init_weights_update_group(
-        self, payload: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, payload: dict[str, _PayloadValue]
+    ) -> _AdminActionResult:
         # Note (Xuesong): init blocks on a NCCL/TCP rendezvous and runs on the
         # scheduler serving thread (admin is drained inline in the event loop), so
         # the serving loop is frozen until the trainer (rank 0) joins. sglang's
@@ -2198,8 +2222,8 @@ class OmniScheduler:
         }
 
     def _admin_destroy_weights_update_group(
-        self, payload: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, payload: dict[str, _PayloadValue]
+    ) -> _AdminActionResult:
         with self._admin_lock:
             success, message = self.model_worker.destroy_weights_update_group(payload)
         return {
@@ -2209,7 +2233,9 @@ class OmniScheduler:
             "error": None if success else str(message),
         }
 
-    def _admin_weights_checker(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _admin_weights_checker(
+        self, payload: dict[str, _PayloadValue]
+    ) -> _AdminActionResult:
         action = str(payload.get("action") or "checksum")
         with self._admin_lock:
             data = self.model_worker.weights_checker(action)
@@ -2268,7 +2294,7 @@ class OmniScheduler:
         )
         return bool(engine_paused and self._last_pause_mode == "retract")
 
-    def _add_request_to_queue(self, req: Any, is_retracted: bool = False) -> None:
+    def _add_request_to_queue(self, req: Req, is_retracted: bool = False) -> None:
         if req.is_retracted:
             _compact_decode_input_history(req._omni_data)
         _Upstream._add_request_to_queue(self, req, is_retracted=is_retracted)
@@ -2537,9 +2563,9 @@ class OmniScheduler:
             # (req i owns extend_lens[i] slots) that filter_batch leaves
             # stale; reslice them here. The asserted fields are never
             # populated on omni extend batches; trip instead of misslicing.
-            assert (
-                batch.input_embeds is None and batch.replace_embeds is None
-            ), "unhandled per-token field on drop-stale extend batch"
+            assert batch.input_embeds is None and batch.replace_embeds is None, (
+                "unhandled per-token field on drop-stale extend batch"
+            )
             lens = batch.extend_lens
             starts = [0] * len(lens)
             for i in range(1, len(lens)):
@@ -2551,8 +2577,7 @@ class OmniScheduler:
             prefill_input_ids_cpu = batch.prefill_input_ids_cpu
             if input_ids is None and prefill_input_ids_cpu is None:
                 raise RuntimeError(
-                    "extend batch carries neither input_ids nor "
-                    "prefill_input_ids_cpu"
+                    "extend batch carries neither input_ids nor prefill_input_ids_cpu"
                 )
             prefix_lens = batch.prefix_lens
             extend_logprob_start_lens = batch.extend_logprob_start_lens
