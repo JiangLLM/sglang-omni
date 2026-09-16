@@ -375,7 +375,7 @@ def _payload_with_state(
     )
 
 
-def _copy_mutable_containers(value: Any) -> Any:
+def _copy_mutable_containers(value: object) -> Any:
     if isinstance(value, torch.Tensor):
         return value
     if isinstance(value, dict):
@@ -486,7 +486,9 @@ def _single_encoder_stage_name(state: Qwen3OmniPipelineState) -> str:
     return next(iter(state.encoder_outs))
 
 
-def _extract_thinker_model_inputs(thinker_inputs: dict[str, Any]) -> dict[str, Any]:
+def _extract_thinker_model_inputs(
+    thinker_inputs: dict[str, _ValueT],
+) -> dict[str, Any]:
     """Return the model input payload without confusing an empty payload for absence.
 
     ``merge_for_thinker`` always emits ``model_inputs``.  In particular, a
@@ -762,7 +764,7 @@ def build_sglang_talker_request(
     tts_pad_embed: torch.Tensor | None = None,
     thinker_chunks_done: bool = True,
     thinker_config: Qwen3OmniMoeThinkerConfig | None = None,
-    talker_model_inputs: dict[str, Any] | None = None,
+    talker_model_inputs: dict[str, _ValueT] | None = None,
     seed: int | None = None,
 ) -> "SGLangARRequestData":
     """Build SGLang AR request for the Talker from thinker hidden states.
