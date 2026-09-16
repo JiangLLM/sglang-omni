@@ -26,6 +26,7 @@ from sglang_omni.comm.data_ref import DataKind, DataRef
 from sglang_omni.comm.engine import CommEngine, KVTransferCancelled, KVTransferRejected
 from sglang_omni.comm.kv_transfer import KVPageTransfer
 from sglang_omni.comm.router import CommRouter
+from sglang_omni.pipeline.local_dispatch import LocalStageDispatcher
 from sglang_omni.pipeline.replicas import ReplicaTopology
 from sglang_omni.pipeline.stage.input import DirectInput, InputHandler
 from sglang_omni.pipeline.stage.stream_queue import StreamItem, StreamQueue
@@ -37,6 +38,7 @@ from sglang_omni.profiler.event_recorder import get_recorder as _get_recorder
 from sglang_omni.profiler.event_recorder import set_active_stage as _set_active_stage
 from sglang_omni.proto import (
     AdminMessage,
+    AdminOperation,
     AdminResult,
     AdminResultMessage,
     CompleteMessage,
@@ -108,13 +110,13 @@ class Stage:
         stage_gpu_ids: dict[str, tuple[int, ...]] | None = None,
         remote_stage_names: set[str] | None = None,
         same_process_targets: set[str] | None = None,
-        local_dispatcher: Any | None = None,
+        local_dispatcher: LocalStageDispatcher | None = None,
         can_accept_stream_before_payload: bool = False,
         disable_direct_cuda_ipc_payload: bool = False,
         tp_fanout: TPLeaderFanout | None = None,
         is_terminal: bool = False,
         replica_topology: dict[str, list[str]] | None = None,
-    ):
+    ) -> None:
         self.name = name
         self.role = role
         self.get_next = get_next
@@ -377,7 +379,15 @@ class Stage:
                     f"Scheduler thread for stage {self.name} crashed"
                 ) from self._scheduler_crash_error
 
-    async def _handle_message(self, msg: Any) -> None:
+    async def _handle_message(
+        self,
+        msg: SubmitMessage
+        | DataAckMessage
+        | DataReadyMessage
+        | ProfilerStartMessage
+        | ProfilerStopMessage
+        | AdminMessage,
+    ) -> None:
         if isinstance(msg, SubmitMessage):
             await self._on_submit(msg)
         elif isinstance(msg, DataAckMessage):
@@ -953,7 +963,7 @@ class Stage:
             IncomingMessage(request_id=request_id, type="stream_chunk", data=item)
         )
 
-    async def _execute(self, payload: Any) -> None:
+    async def _execute(self, payload: StagePayload) -> None:
         request_id = payload.request_id
         if request_id in self._aborted:
             return
@@ -1017,7 +1027,7 @@ class Stage:
         result = await self._run_admin_operation(operation)
         await self.control_plane.send_admin_result(AdminResultMessage(result))
 
-    async def _run_admin_operation(self, operation: Any) -> AdminResult:
+    async def _run_admin_operation(self, operation: AdminOperation) -> AdminResult:
         try:
             handler = getattr(self.scheduler, "admin", None)
             if handler is None:
@@ -1047,7 +1057,9 @@ class Stage:
                 error=str(exc),
             )
 
-    def _admin_result_from_outcome(self, operation: Any, outcome: Any) -> AdminResult:
+    def _admin_result_from_outcome(
+        self, operation: AdminOperation, outcome: Any
+    ) -> AdminResult:
         if isinstance(outcome, AdminResult):
             return outcome
         if isinstance(outcome, dict):
@@ -1071,7 +1083,7 @@ class Stage:
 
     def _admin_result(
         self,
-        operation: Any,
+        operation: AdminOperation,
         *,
         success: bool,
         message: str = "",
