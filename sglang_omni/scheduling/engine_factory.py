@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SchedulerKwargT = TypeVar("_SchedulerKwargT")
+_ResultRequestT = TypeVar("_ResultRequestT")
 
 
 def _normalize_context_length(value: object, *, model_name: str) -> int:
@@ -416,7 +417,7 @@ class SGLangGenerationEngineBuilder(ABC):
         model_runner: ModelRunner,
         request_builder: Callable[[StagePayload], ARRequestData | DeferredAdmission]
         | None,
-        result_adapter: Any,
+        result_adapter: Callable[[_ResultRequestT], object] | None,
         extra_scheduler_kwargs: dict[str, _SchedulerKwargT],
     ) -> OmniScheduler:
         from sglang_omni.scheduling import omni_scheduler
@@ -516,7 +517,7 @@ class TtsEngineBuilder(SGLangGenerationEngineBuilder):
         model_runner: ModelRunner,
         request_builder: Callable[[StagePayload], ARRequestData | DeferredAdmission]
         | None,
-        result_adapter: Any,
+        result_adapter: Callable[[_ResultRequestT], object] | None,
     ) -> OmniScheduler:
         return self._make_scheduler(
             model_worker=model_worker,
