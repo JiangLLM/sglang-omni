@@ -155,9 +155,9 @@ class Qwen3TTSIncrementalCodecCudaGraphRunner:
         self._enabled = False
         self._disable_reason: str | None = None
         self._owner_pid = os.getpid()
-        self._graphs: dict[
-            IncrementalCodecGraphKey, _CapturedIncrementalCodecGraph
-        ] = {}
+        self._graphs: dict[IncrementalCodecGraphKey, _CapturedIncrementalCodecGraph] = (
+            {}
+        )
         self._capture_complete = False
         self._pool: torch.cuda._POOL_HANDLE | None = None
         self._capture_stream: torch.cuda.Stream | None = None

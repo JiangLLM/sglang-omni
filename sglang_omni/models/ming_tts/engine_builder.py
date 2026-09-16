@@ -227,9 +227,7 @@ class MingTtsEngineBuilder(TtsEngineBuilder):
         self._model_runner = MingTTSModelRunner(model_worker, output_proc)
         return self._model_runner
 
-    def make_adapters(
-        self, model: MingTTSSGLangModel | None
-    ) -> tuple[
+    def make_adapters(self, model: MingTTSSGLangModel | None) -> tuple[
         Callable[[StagePayload], MingTTSSGLangRequestData],
         Callable[[MingTTSSGLangRequestData], StagePayload],
     ]:

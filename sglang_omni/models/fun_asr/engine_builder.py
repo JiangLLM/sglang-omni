@@ -202,9 +202,7 @@ class FunASREngineBuilder(AsrEngineBuilder):
             max_batch_wait_ms=self.pre_lm_max_batch_wait_ms,
         )
 
-    def make_adapters(
-        self, model: object
-    ) -> tuple[
+    def make_adapters(self, model: object) -> tuple[
         Callable[[StagePayload], request_builders.FunASRRequestData],
         Callable[[request_builders.FunASRRequestData], StagePayload],
     ]:

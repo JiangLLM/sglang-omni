@@ -408,9 +408,7 @@ class Qwen3ASREngineBuilder(AsrEngineBuilder):
             else self._should_wait_for_encode()
         )
 
-    def make_adapters(
-        self, model: object
-    ) -> tuple[
+    def make_adapters(self, model: object) -> tuple[
         Callable[[StagePayload], Qwen3ASRRequestData | DeferredAdmission],
         Callable[[Qwen3ASRRequestData], StagePayload],
     ]:

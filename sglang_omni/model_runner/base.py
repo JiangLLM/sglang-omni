@@ -30,7 +30,6 @@ from sglang_omni.scheduling.types import (
     sampled_logprobs_to_list,
 )
 
-
 if TYPE_CHECKING:
     from sglang.srt.layers.logits_processor import LogitsProcessorOutput
     from sglang.srt.managers.schedule_batch import Req, ScheduleBatch

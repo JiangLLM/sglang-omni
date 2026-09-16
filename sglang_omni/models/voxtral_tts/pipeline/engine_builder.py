@@ -87,9 +87,7 @@ class VoxtralTtsEngineBuilder(TtsEngineBuilder):
 
         return model_runner_mod.VoxtralTTSModelRunner(model_worker, output_proc)
 
-    def make_adapters(
-        self, model: VoxtralSGLangTTSModel | None
-    ) -> tuple[
+    def make_adapters(self, model: VoxtralSGLangTTSModel | None) -> tuple[
         Callable[[StagePayload], VoxtralSGLangRequestData],
         Callable[[VoxtralSGLangRequestData], StagePayload],
     ]:

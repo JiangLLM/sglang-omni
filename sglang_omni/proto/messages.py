@@ -13,7 +13,6 @@ from sglang_omni.proto.kv_transfer import (
 )
 from sglang_omni.proto.request import StagePayload
 
-
 _MessageValueT = TypeVar("_MessageValueT")
 
 

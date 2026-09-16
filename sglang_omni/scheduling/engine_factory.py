@@ -415,8 +415,9 @@ class SGLangGenerationEngineBuilder(ABC):
         server_args: ServerArgs,
         model_config: ModelConfig,
         model_runner: ModelRunner,
-        request_builder: Callable[[StagePayload], ARRequestData | DeferredAdmission]
-        | None,
+        request_builder: (
+            Callable[[StagePayload], ARRequestData | DeferredAdmission] | None
+        ),
         result_adapter: Callable[[_ResultRequestT], object] | None,
         extra_scheduler_kwargs: dict[str, _SchedulerKwargT],
     ) -> OmniScheduler:
@@ -515,8 +516,9 @@ class TtsEngineBuilder(SGLangGenerationEngineBuilder):
         server_args: ServerArgs,
         model_config: ModelConfig,
         model_runner: ModelRunner,
-        request_builder: Callable[[StagePayload], ARRequestData | DeferredAdmission]
-        | None,
+        request_builder: (
+            Callable[[StagePayload], ARRequestData | DeferredAdmission] | None
+        ),
         result_adapter: Callable[[_ResultRequestT], object] | None,
     ) -> OmniScheduler:
         return self._make_scheduler(

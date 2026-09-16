@@ -163,9 +163,7 @@ class MiniMaxMusic3EngineBuilder(TtsEngineBuilder):
         self._model_runner = MiniMaxMusic3ModelRunner(model_worker, output_proc)
         return self._model_runner
 
-    def make_adapters(
-        self, model: object
-    ) -> tuple[
+    def make_adapters(self, model: object) -> tuple[
         Callable[[StagePayload], MiniMaxMusic3SGLangRequestData],
         Callable[[MiniMaxMusic3SGLangRequestData], StagePayload],
     ]:

@@ -181,9 +181,7 @@ class MossTtsLocalEngineBuilder(TtsEngineBuilder):
 
         return model_runner_mod.MossTTSLocalModelRunner(model_worker, output_proc)
 
-    def make_adapters(
-        self, model: MossTTSLocalSGLangModel | None
-    ) -> tuple[
+    def make_adapters(self, model: MossTTSLocalSGLangModel | None) -> tuple[
         Callable[[StagePayload], MossTTSLocalSGLangRequestData],
         Callable[[MossTTSLocalSGLangRequestData], StagePayload],
     ]:

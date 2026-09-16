@@ -52,9 +52,7 @@ from .languages import resolve_language
 if TYPE_CHECKING:
     from types import SimpleNamespace
 
-    from sglang_omni.models.qwen3_asr.encoder_service import (
-        Qwen3ASRPreLMEncoderService,
-    )
+    from sglang_omni.models.qwen3_asr.encoder_service import Qwen3ASRPreLMEncoderService
     from sglang_omni.scheduling.types import RequestOutput
 
 logger = logging.getLogger(__name__)

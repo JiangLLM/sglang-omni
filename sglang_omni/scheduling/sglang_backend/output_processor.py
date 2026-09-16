@@ -14,7 +14,6 @@ from sglang_omni.scheduling.types import (
     SchedulerRequest,
 )
 
-
 if TYPE_CHECKING:
     from sglang.srt.managers.scheduler import GenerationBatchResult
 

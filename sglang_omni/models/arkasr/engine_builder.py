@@ -184,9 +184,7 @@ class ArkasrEngineBuilder(AsrEngineBuilder):
                 max_queue_size=self.pre_lm_max_pending,
             )
 
-    def make_adapters(
-        self, model: object
-    ) -> tuple[
+    def make_adapters(self, model: object) -> tuple[
         Callable[[StagePayload], ArkASRRequestData | DeferredAdmission],
         Callable[[ArkASRRequestData], StagePayload],
     ]:

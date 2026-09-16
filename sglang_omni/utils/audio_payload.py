@@ -9,7 +9,6 @@ import numpy as np
 import torch
 from numpy.typing import ArrayLike
 
-
 _ReferenceValueT = TypeVar("_ReferenceValueT")
 
 

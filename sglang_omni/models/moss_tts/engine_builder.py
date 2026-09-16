@@ -107,9 +107,7 @@ class MossTtsEngineBuilder(TtsEngineBuilder):
 
         return model_runner_mod.MossTTSModelRunner(model_worker, output_proc)
 
-    def make_adapters(
-        self, model: MossTTSDelaySGLangModel | None
-    ) -> tuple[
+    def make_adapters(self, model: MossTTSDelaySGLangModel | None) -> tuple[
         Callable[[StagePayload], MossTTSSGLangRequestData],
         Callable[[MossTTSSGLangRequestData], StagePayload],
     ]:

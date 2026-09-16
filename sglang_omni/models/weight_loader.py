@@ -13,7 +13,6 @@ import torch.nn as nn
 from huggingface_hub import snapshot_download
 from transformers.utils.hub import cached_file
 
-
 _ModuleT = TypeVar("_ModuleT", bound=nn.Module)
 
 

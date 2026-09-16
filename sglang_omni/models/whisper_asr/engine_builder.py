@@ -357,9 +357,7 @@ class WhisperASREngineBuilder(AsrEngineBuilder):
             "cuda_graph_backend_prefill": CudaGraphBackend.BREAKABLE,
         }
 
-    def make_adapters(
-        self, model: object
-    ) -> tuple[
+    def make_adapters(self, model: object) -> tuple[
         Callable[[StagePayload], WhisperASRRequestData],
         Callable[[WhisperASRRequestData], StagePayload],
     ]:

@@ -14,7 +14,6 @@ from sglang_omni.models.qwen3_tts.incremental_codec import (
     Qwen3TTSIncrementalDecoder,
 )
 
-
 if TYPE_CHECKING:
     from sglang_omni.models.qwen3_tts.incremental_codec_cuda_graph import (
         IncrementalCodecGraphStats,

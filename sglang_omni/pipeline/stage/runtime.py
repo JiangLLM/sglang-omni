@@ -391,12 +391,14 @@ class Stage:
 
     async def _handle_message(
         self,
-        msg: SubmitMessage
-        | DataAckMessage
-        | DataReadyMessage
-        | ProfilerStartMessage
-        | ProfilerStopMessage
-        | AdminMessage,
+        msg: (
+            SubmitMessage
+            | DataAckMessage
+            | DataReadyMessage
+            | ProfilerStartMessage
+            | ProfilerStopMessage
+            | AdminMessage
+        ),
     ) -> None:
         if isinstance(msg, SubmitMessage):
             await self._on_submit(msg)

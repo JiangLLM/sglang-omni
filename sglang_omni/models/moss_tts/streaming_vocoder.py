@@ -20,7 +20,6 @@ from sglang_omni.scheduling.streaming_vocoder import (
     resolve_initial_codec_chunk_frames,
 )
 
-
 if TYPE_CHECKING:
     from sglang_omni.models.moss_tts.vocoder import MossTTSVocoder
 

@@ -263,9 +263,7 @@ class FunCosyVoice3EngineBuilder(TtsEngineBuilder):
         if not server_args.mlx_enable_sampling:
             raise ValueError("Fun-CosyVoice3 MLX requires mlx_enable_sampling=True")
 
-    def make_adapters(
-        self, model: object
-    ) -> tuple[
+    def make_adapters(self, model: object) -> tuple[
         Callable[[StagePayload], CosyVoice3SGLangRequestData],
         Callable[[CosyVoice3SGLangRequestData], StagePayload],
     ]:

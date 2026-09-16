@@ -657,9 +657,11 @@ def _collect_moss_stream_rows(
     return rows
 
 
-def make_moss_tts_stream_output_builder() -> Callable[
-    [str, MossTTSSGLangRequestData, RequestOutput | None], list[OutgoingMessage]
-]:
+def make_moss_tts_stream_output_builder() -> (
+    Callable[
+        [str, MossTTSSGLangRequestData, RequestOutput | None], list[OutgoingMessage]
+    ]
+):
     """Build incremental delayed-code chunks for streaming requests."""
 
     def stream_output_builder(
@@ -847,9 +849,7 @@ def apply_sglang_moss_tts_result(
     )
 
 
-def make_moss_tts_scheduler_adapters(
-    *, model: MossTTSDelaySGLangModel | None
-) -> tuple[
+def make_moss_tts_scheduler_adapters(*, model: MossTTSDelaySGLangModel | None) -> tuple[
     Callable[[StagePayload], MossTTSSGLangRequestData],
     Callable[[MossTTSSGLangRequestData], StagePayload],
 ]:

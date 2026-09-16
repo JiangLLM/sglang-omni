@@ -932,9 +932,7 @@ def accept_cosyvoice3_stream_token(
     return True
 
 
-def make_cosyvoice3_scheduler_adapters(
-    *, model: object
-) -> tuple[
+def make_cosyvoice3_scheduler_adapters(*, model: object) -> tuple[
     Callable[[StagePayload], CosyVoice3SGLangRequestData],
     Callable[[CosyVoice3SGLangRequestData], StagePayload],
 ]:

@@ -174,9 +174,7 @@ class MossTranscribeDiarizeEngineBuilder(AsrEngineBuilder):
             max_batch_size=self.encoder_max_batch_size,
         )
 
-    def make_adapters(
-        self, model: object
-    ) -> tuple[
+    def make_adapters(self, model: object) -> tuple[
         Callable[[StagePayload], MossTranscribeDiarizeRequestData],
         Callable[[MossTranscribeDiarizeRequestData], StagePayload],
     ]:

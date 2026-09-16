@@ -179,9 +179,7 @@ class DotsTTSEngineBuilder(TtsEngineBuilder):
         self._model_runner = DotsTTSModelRunner(model_worker, output_proc)
         return self._model_runner
 
-    def make_adapters(
-        self, model: DotsTTSSGLangModel | None
-    ) -> tuple[
+    def make_adapters(self, model: DotsTTSSGLangModel | None) -> tuple[
         Callable[[StagePayload], DotsTTSSGLangRequestData],
         Callable[[DotsTTSSGLangRequestData], StagePayload],
     ]:

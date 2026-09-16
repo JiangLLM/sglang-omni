@@ -43,7 +43,6 @@ from sglang.srt.runtime_context import get_model, get_serving
 from sglang.srt.utils import broadcast_pyobj
 
 from sglang_omni.admission import QueueFullError
-from sglang_omni.proto import StagePayload
 from sglang_omni.profiler.event_recorder import emit as _emit_event
 from sglang_omni.profiler.event_recorder import (
     emit_model_path_end as _emit_model_path_end,
@@ -52,6 +51,7 @@ from sglang_omni.profiler.event_recorder import (
     emit_model_path_start as _emit_model_path_start,
 )
 from sglang_omni.profiler.event_recorder import get_active_stage as _get_active_stage
+from sglang_omni.proto import StagePayload
 from sglang_omni.proto.admin import (
     ADMIN_CONTINUE_GENERATION,
     ADMIN_DESTROY_WEIGHTS_UPDATE_GROUP,
@@ -224,8 +224,9 @@ class OmniScheduler:
         model_config: ModelConfig,
         *,
         model_runner: ModelRunner | None = None,
-        request_builder: Callable[[StagePayload], ARRequestData | DeferredAdmission]
-        | None = None,
+        request_builder: (
+            Callable[[StagePayload], ARRequestData | DeferredAdmission] | None
+        ) = None,
         result_adapter: Callable | None = None,
         stream_output_builder: Callable | None = None,
         stream_chunk_handler: Callable | None = None,
@@ -729,9 +730,9 @@ class OmniScheduler:
         )
         self.output_streamer = types.SimpleNamespace(
             stream_output=self.stream_output,
-            _stream_output_generation=lambda reqs,
-            return_logprob,
-            **_kwargs: self.stream_output(reqs, return_logprob),
+            _stream_output_generation=lambda reqs, return_logprob, **_kwargs: self.stream_output(
+                reqs, return_logprob
+            ),
         )
         self.init_beam_coordinator()
         self.batch_result_processor = SchedulerBatchResultProcessor(
@@ -2564,9 +2565,9 @@ class OmniScheduler:
             # (req i owns extend_lens[i] slots) that filter_batch leaves
             # stale; reslice them here. The asserted fields are never
             # populated on omni extend batches; trip instead of misslicing.
-            assert batch.input_embeds is None and batch.replace_embeds is None, (
-                "unhandled per-token field on drop-stale extend batch"
-            )
+            assert (
+                batch.input_embeds is None and batch.replace_embeds is None
+            ), "unhandled per-token field on drop-stale extend batch"
             lens = batch.extend_lens
             starts = [0] * len(lens)
             for i in range(1, len(lens)):

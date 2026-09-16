@@ -34,7 +34,6 @@ from sglang_omni.pipeline.coordinator import Coordinator, CoordinatorHealth
 from sglang_omni.proto import OmniRequest, RequestState, StreamMessage
 from sglang_omni.proto.admin import AdminResponse
 
-
 _PayloadValue = TypeVar("_PayloadValue")
 
 

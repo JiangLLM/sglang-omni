@@ -246,9 +246,7 @@ class Zonos2EngineBuilder(TtsEngineBuilder):
             stream_emit_first_chunk_frames=self.stream_emit_first_chunk_frames,
         )
 
-    def make_adapters(
-        self, model: Zonos2SGLangModel | None
-    ) -> tuple[
+    def make_adapters(self, model: Zonos2SGLangModel | None) -> tuple[
         Callable[[StagePayload], Zonos2SGLangRequestData],
         Callable[[Zonos2SGLangRequestData], StagePayload],
     ]:

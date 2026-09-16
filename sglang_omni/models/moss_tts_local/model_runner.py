@@ -17,7 +17,6 @@ from sglang_omni.models.moss_tts_local.state_pool import MossTTSLocalDecodeJourn
 from sglang_omni.scheduling.messages import OutgoingMessage
 from sglang_omni.scheduling.types import RequestOutput
 
-
 if TYPE_CHECKING:
     from queue import Queue
 

@@ -11,7 +11,6 @@ from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
-
 _EventValueT = TypeVar("_EventValueT")
 
 

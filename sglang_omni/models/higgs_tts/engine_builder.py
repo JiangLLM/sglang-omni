@@ -155,9 +155,7 @@ class HiggsTtsEngineBuilder(TtsEngineBuilder):
 
         return model_runner_mod.HiggsTTSModelRunner(model_worker, output_proc)
 
-    def make_adapters(
-        self, model: object
-    ) -> tuple[
+    def make_adapters(self, model: object) -> tuple[
         Callable[[StagePayload], HiggsSGLangRequestData],
         Callable[[HiggsSGLangRequestData], StagePayload],
     ]:

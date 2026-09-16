@@ -106,9 +106,7 @@ def _resolve_seed(raw: Any) -> int | None:
         raise ValueError(f"AuK seed must be an integer, got {raw!r}") from exc
 
 
-def _load_reference(
-    source: Any, sample_rate: int
-) -> tuple[
+def _load_reference(source: Any, sample_rate: int) -> tuple[
     np.ndarray[tuple[int, ...], np.dtype[np.float32]],
     np.ndarray[tuple[int, ...], np.dtype[np.float32]],
 ]:

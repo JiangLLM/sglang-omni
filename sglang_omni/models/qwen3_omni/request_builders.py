@@ -925,9 +925,9 @@ def apply_thinker_result(
     return thinker_out
 
 
-def make_thinker_stream_output_builder() -> Callable[
-    [str, SGLangARRequestData, RequestOutput], list[OutgoingMessage]
-]:
+def make_thinker_stream_output_builder() -> (
+    Callable[[str, SGLangARRequestData, RequestOutput], list[OutgoingMessage]]
+):
     def _normalize_chunk_hidden(hidden: torch.Tensor | None) -> torch.Tensor | None:
         if hidden is None:
             return None

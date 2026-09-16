@@ -206,9 +206,7 @@ class FishS2ProEngineBuilder(TtsEngineBuilder):
 
         return model_runner_mod.FishS2ProModelRunner(model_worker, output_proc)
 
-    def make_adapters(
-        self, model: object
-    ) -> tuple[
+    def make_adapters(self, model: object) -> tuple[
         Callable[[StagePayload], request_builders.S2ProSGLangRequestData],
         Callable[[request_builders.S2ProSGLangRequestData], StagePayload],
     ]:

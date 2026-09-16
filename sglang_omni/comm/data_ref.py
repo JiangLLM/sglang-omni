@@ -9,7 +9,6 @@ from typing import Any, TypeVar
 
 import msgspec
 
-
 _Value = TypeVar("_Value")
 
 
