@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Mapping, MutableMapping
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from fastapi import WebSocket, WebSocketDisconnect
-from pydantic import JsonValue, ValidationError
+from pydantic import ValidationError
 from starlette.websockets import WebSocketState
 
 from sglang_omni.client import Client, ClientError
@@ -38,6 +38,7 @@ from sglang_omni.serve.speech_service import (
     PreparedSpeechRequest,
     SpeechRequestValidator,
 )
+from sglang_omni.utils.json import JsonValue
 
 if TYPE_CHECKING:
     from sglang_omni.serve.speech_voices import UploadedVoiceReference

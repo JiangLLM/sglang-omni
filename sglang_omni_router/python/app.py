@@ -15,7 +15,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from pydantic import JsonValue, ValidationError
+from pydantic import ValidationError
 
 from sglang_omni import __version__
 from sglang_omni.http.admin_auth import (
@@ -23,6 +23,7 @@ from sglang_omni.http.admin_auth import (
     resolve_admin_api_key,
 )
 from sglang_omni.http.favicon import register_favicon
+from sglang_omni.utils.json import JsonValue
 from sglang_omni_router.python.config import (
     MIN_CONNECTIONS_PER_WORKER,
     RouterConfig,

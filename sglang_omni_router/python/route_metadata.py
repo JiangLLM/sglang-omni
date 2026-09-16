@@ -10,8 +10,8 @@ from enum import Enum
 from typing import Any, cast
 
 from fastapi import Request
-from pydantic import JsonValue
 
+from sglang_omni.utils.json import JsonValue
 from sglang_omni_router.python.config import DEFAULT_CAPABILITIES, Capability
 from sglang_omni_router.python.worker import ServiceClass
 
@@ -194,8 +194,7 @@ def extract_route_metadata(
             if form.model is not None:
                 if has_route_model_header and route_model != form.model:
                     raise RouteMetadataError(
-                        f"{ROUTE_MODEL_HEADER} conflicts with the multipart "
-                        "form model"
+                        f"{ROUTE_MODEL_HEADER} conflicts with the multipart form model"
                     )
                 model = form.model
             if form.stream is not None:
