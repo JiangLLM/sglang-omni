@@ -8,8 +8,8 @@ import json
 import logging
 import uuid
 from collections import deque
-from collections.abc import Awaitable, Mapping, MutableMapping
-from typing import TYPE_CHECKING, Any, TypeVar
+from collections.abc import Awaitable, Generator, Mapping, MutableMapping
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
@@ -65,7 +65,15 @@ def new_speech_ws_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex}"
 
 
-async def _cancel_tasks(*tasks: asyncio.Task[Any]) -> None:
+class _CancellableAwaitable(Protocol):
+    def done(self) -> bool: ...
+
+    def cancel(self) -> bool: ...
+
+    def __await__(self) -> Generator[object, None, object]: ...
+
+
+async def _cancel_tasks(*tasks: _CancellableAwaitable) -> None:
     for task in tasks:
         if not task.done():
             task.cancel()
