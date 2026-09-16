@@ -234,7 +234,7 @@ class MossTTSLocalSGLangModel(torch.nn.Module):
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self._prepare_multi_modal_inputs(input_ids)
 
-    def _prepare_multi_modal_inputs(self, input_ids: torch.LongTensor) -> torch.Tensor:
+    def _prepare_multi_modal_inputs(self, input_ids: torch.Tensor) -> torch.Tensor:
         """Sum text + per-codebook embeddings for ``[T, channels]`` rows.
 
         Pad codes (``audio_pad_code``) hit the zeroed extra row of each audio
