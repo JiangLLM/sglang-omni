@@ -180,7 +180,7 @@ def _normalize_extra_config_keys(
         return False
 
     escaped_prefix = stage_prefix.replace(".", r"\.")
-    normalized_extra: dict[str, Any] = {}
+    normalized_extra: dict[str, object] = {}
     changed = False
     for key, value in extra_config.items():
         normalized_key = _strip_stage_prefix(key, stage_prefix, escaped_prefix)
