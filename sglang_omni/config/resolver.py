@@ -16,9 +16,10 @@ What it deliberately does *not* do:
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeGuard, TypeVar
 
 from sglang_omni.config.patch import ConfigPatch, ConfigPatchSet
 from sglang_omni.config.path import ConfigPath, ConfigPathError
@@ -26,6 +27,10 @@ from sglang_omni.config.provenance import ProvenanceMap
 from sglang_omni.config.schema import PipelineConfig
 
 __all__ = ["ConfigResolver", "ResolvedConfig", "ConfigDifference", "diff_configs"]
+
+_ExpectedValueT = TypeVar("_ExpectedValueT")
+_ActualValueT = TypeVar("_ActualValueT")
+_ValueT = TypeVar("_ValueT")
 
 
 @dataclass(frozen=True)
@@ -36,7 +41,7 @@ class ResolvedConfig:
     provenance: ProvenanceMap
     patches: ConfigPatchSet
 
-    def value(self, path: str) -> Any:
+    def value(self, path: str) -> object:
         return ConfigPath.parse(path, type(self.config)).read(self.config)
 
 
@@ -116,7 +121,7 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
     return merged
 
 
-def _safe_read(path: ConfigPath, data: dict[str, Any]) -> Any:
+def _safe_read(path: ConfigPath, data: dict[str, _ValueT]) -> object:
     """Read a path that may not exist yet (a new mapping key, for instance)."""
     try:
         return path.read(data)
@@ -132,16 +137,16 @@ def _safe_read(path: ConfigPath, data: dict[str, Any]) -> Any:
 @dataclass(frozen=True)
 class ConfigDifference:
     path: str
-    expected: Any
-    actual: Any
+    expected: object
+    actual: object
 
     def render(self) -> str:
         return f"{self.path}: expected {self.expected!r}, got {self.actual!r}"
 
 
 def diff_configs(
-    expected: PipelineConfig | dict[str, Any],
-    actual: PipelineConfig | dict[str, Any],
+    expected: PipelineConfig | dict[str, _ExpectedValueT],
+    actual: PipelineConfig | dict[str, _ActualValueT],
 ) -> list[ConfigDifference]:
     """Compare two configs field by field, addressing stages by name.
 
@@ -153,11 +158,11 @@ def diff_configs(
     return _diff(_as_dump(expected), _as_dump(actual), "")
 
 
-def _as_dump(value: PipelineConfig | dict[str, Any]) -> dict[str, Any]:
+def _as_dump(value: PipelineConfig | dict[str, _ValueT]) -> dict[str, Any]:
     return value.model_dump() if isinstance(value, PipelineConfig) else value
 
 
-def _diff(expected: Any, actual: Any, prefix: str) -> list[ConfigDifference]:
+def _diff(expected: object, actual: object, prefix: str) -> list[ConfigDifference]:
     if isinstance(expected, dict) and isinstance(actual, dict):
         out: list[ConfigDifference] = []
         for key in sorted(set(expected) | set(actual)):
@@ -189,7 +194,7 @@ def _diff(expected: Any, actual: Any, prefix: str) -> list[ConfigDifference]:
     return []
 
 
-def _is_named_list(value: Any) -> bool:
+def _is_named_list(value: object) -> TypeGuard[list[dict[Hashable, object]]]:
     return (
         isinstance(value, list)
         and bool(value)
