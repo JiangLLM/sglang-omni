@@ -91,7 +91,9 @@ class MossTTSSGLangRequestData(ARRequestData):
     stream_prefix_scanned: bool = False
     stream_output_row_count: int = 0
     stream_row_count: int = 0
-    pending_feedback_queue: Any = field(default_factory=collections.deque)
+    pending_feedback_queue: collections.deque[torch.Tensor] | list[torch.Tensor] = (
+        field(default_factory=collections.deque)
+    )
     text_temperature: float = TEXT_SAMPLING.temperature
     text_top_p: float = TEXT_SAMPLING.top_p
     text_top_k: int = TEXT_SAMPLING.top_k
