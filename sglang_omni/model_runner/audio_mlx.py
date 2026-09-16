@@ -3,10 +3,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import mlx.core as mx
+import numpy as np
 import torch
+
+if TYPE_CHECKING:
+    from sglang.srt.hardware_backend.mlx.model_runner import MlxPendingPrefill
 
 
 class AudioMlxModelRunner:
@@ -25,7 +29,9 @@ class AudioMlxModelRunner:
         return mm_inputs.mm_items[0]
 
     @staticmethod
-    def _to_numpy(tensor: Any) -> Any:
+    def _to_numpy(
+        tensor: torch.Tensor,
+    ) -> np.ndarray[tuple[int, ...], np.dtype[np.generic]]:
         tensor = tensor.detach().cpu()
         if tensor.dtype == torch.bfloat16:
             tensor = tensor.float()
@@ -95,8 +101,8 @@ class AudioMlxModelRunner:
         req: Any | None = None,
         needs_logits: bool = True,
         logit_edit_row: mx.array | None = None,
-        logprob_spec: Any = None,
-    ):
+        logprob_spec: object = None,
+    ) -> MlxPendingPrefill:
         from sglang.srt.hardware_backend.mlx.model_runner import MlxPendingPrefill
 
         if req is None:
