@@ -6,7 +6,7 @@ from typing import Any, Literal, TypeAlias, TypedDict, TypeVar
 
 import msgspec
 
-from sglang_omni.proto.admin import AdminOperation, AdminResult
+from sglang_omni.proto.admin import AdminOperation, AdminResult, SerializedAdminResult
 from sglang_omni.proto.kv_transfer import (
     KVTransferPrepareMessage,
     KVTransferReadyMessage,
@@ -381,7 +381,7 @@ class AdminResultMessage:
 
     result: AdminResult
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, str | SerializedAdminResult]:
         return {"type": "admin_result", "result": self.result.to_dict()}
 
     @classmethod
