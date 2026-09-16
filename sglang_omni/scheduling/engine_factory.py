@@ -7,10 +7,11 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from numbers import Integral
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 from sglang.srt.arg_groups.model_override_base import resolved_view
 
+from sglang_omni.proto import StagePayload
 from sglang_omni.scheduling.generation_batch_policy import (
     CudaGraphBackend,
     build_generation_batch_overrides,
@@ -18,6 +19,7 @@ from sglang_omni.scheduling.generation_batch_policy import (
     operator_selected_prefill_backend,
     validate_generation_batch_policy,
 )
+from sglang_omni.scheduling.types import ARRequestData, DeferredAdmission
 from sglang_omni.utils.checkpoint import resolve_checkpoint as _resolve_checkpoint
 
 if TYPE_CHECKING:
@@ -37,8 +39,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_SchedulerKwargT = TypeVar("_SchedulerKwargT")
 
-def _normalize_context_length(value: Any, *, model_name: str) -> int:
+
+def _normalize_context_length(value: object, *, model_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, Integral):
         raise ValueError(
             f"{model_name} context length must be a positive integer, got {value!r}"
@@ -277,7 +281,7 @@ class SGLangGenerationEngineBuilder(ABC):
         self,
         checkpoint_dir: str,
         *,
-        server_args_overrides: Mapping[str, Any] | None = None,
+        server_args_overrides: Mapping[str, object] | None = None,
     ) -> int:
         del checkpoint_dir, server_args_overrides
         return self.context_length
@@ -351,7 +355,9 @@ class SGLangGenerationEngineBuilder(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def make_adapters(self, model: Any) -> tuple[Any, Any]:
+    def make_adapters(
+        self, model: Any
+    ) -> tuple[Callable[[StagePayload], ARRequestData | DeferredAdmission] | None, Any]:
         raise NotImplementedError
 
     def _build_runtime(
@@ -408,9 +414,10 @@ class SGLangGenerationEngineBuilder(ABC):
         server_args: ServerArgs,
         model_config: ModelConfig,
         model_runner: ModelRunner,
-        request_builder: Any,
+        request_builder: Callable[[StagePayload], ARRequestData | DeferredAdmission]
+        | None,
         result_adapter: Any,
-        extra_scheduler_kwargs: dict[str, Any],
+        extra_scheduler_kwargs: dict[str, _SchedulerKwargT],
     ) -> OmniScheduler:
         from sglang_omni.scheduling import omni_scheduler
 
@@ -507,7 +514,8 @@ class TtsEngineBuilder(SGLangGenerationEngineBuilder):
         server_args: ServerArgs,
         model_config: ModelConfig,
         model_runner: ModelRunner,
-        request_builder: Any,
+        request_builder: Callable[[StagePayload], ARRequestData | DeferredAdmission]
+        | None,
         result_adapter: Any,
     ) -> OmniScheduler:
         return self._make_scheduler(
