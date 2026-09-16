@@ -68,7 +68,7 @@ class PipelineStateBase:
             data["engine_time_s"] = float(self.engine_time_s)
 
 
-def _tensor_to_list(value: Any) -> Any:
+def _tensor_to_list(value: object) -> Any:
     try:
         import torch
     except ImportError:
@@ -145,7 +145,7 @@ def _validate_emit_mode(emit: str | None) -> None:
 
 
 def wire(
-    default: Any = MISSING,
+    default: object = MISSING,
     *,
     default_factory: Any = MISSING,
     emit: str | None = None,
