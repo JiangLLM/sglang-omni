@@ -76,7 +76,7 @@ class NpuDeviceGraphBackend:
         thread_local_errors: bool = False,
     ) -> Iterator[Any]:
         graph = torch.npu.NPUGraph()
-        kwargs: dict[str, Any] = {}
+        kwargs: dict[str, object] = {}
         if pool is not None:
             kwargs["pool"] = pool
         if stream is not None:
