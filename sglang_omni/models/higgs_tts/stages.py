@@ -26,7 +26,7 @@ import logging
 import os
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import torch
 import torchaudio.functional as F_audio
@@ -90,7 +90,7 @@ _CONSUMED_REFERENCE_INPUT_KEYS = frozenset(
 )
 
 
-def _reference_audio_cache_key(reference_audio: Any) -> str | None:
+def _reference_audio_cache_key(reference_audio: object) -> str | None:
     """Safe source key for preprocessing waveform-cache lookup."""
     if isinstance(reference_audio, (str, Path)):
         return _reference_path_cache_key(reference_audio)
@@ -136,7 +136,7 @@ def _reference_code_cache_key_from_waveform(
 
 
 def _uploaded_voice_cache_key(
-    reference_audio: Any,
+    reference_audio: object,
     *,
     artifact_kind: str,
 ) -> SpeakerCacheKey | None:
@@ -179,6 +179,12 @@ class _HiggsReferenceInput:
         self.content_key = content_key
 
 
+class _ReferenceAudioCodec(Protocol):
+    def encode_reference(
+        self, waveform: torch.Tensor, /, *, sample_rate: int
+    ) -> torch.Tensor: ...
+
+
 class _HiggsReferenceEncodeHook(TensorReferenceEncodeHook[_HiggsReferenceInput]):
     """Encode delayed 24 kHz reference codes keyed by waveform content."""
 
@@ -188,7 +194,9 @@ class _HiggsReferenceEncodeHook(TensorReferenceEncodeHook[_HiggsReferenceInput])
     storage_dtype = torch.int32
     output_dtype = torch.long
 
-    def __init__(self, codec: Any, *, num_codebooks: int, model_identity: str):
+    def __init__(
+        self, codec: _ReferenceAudioCodec, *, num_codebooks: int, model_identity: str
+    ) -> None:
         self._codec = codec
         self._num_codebooks = int(num_codebooks)
         self.model_id = str(model_identity)
