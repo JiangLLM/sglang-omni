@@ -84,7 +84,7 @@ class PreLMEncoderService(ABC, Generic[ItemT, EncodedT, EmbeddingT]):
     def _next_batch(self) -> tuple[list[QueueEntry[ItemT]], bool]:
         raise NotImplementedError
 
-    def _batch_context(self) -> AbstractContextManager[Any]:
+    def _batch_context(self) -> AbstractContextManager[None]:
         return contextlib.nullcontext()
 
     @abstractmethod
@@ -180,7 +180,7 @@ class PreLMEncoderService(ABC, Generic[ItemT, EncodedT, EmbeddingT]):
     ) -> bool:
         return False
 
-    def _future_result(self, embedding: EmbeddingT) -> Any:
+    def _future_result(self, embedding: EmbeddingT) -> EmbeddingT | None:
         return embedding
 
     def _on_batch_start(self, batch: list[QueueEntry[ItemT]]) -> None:
