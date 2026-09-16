@@ -83,6 +83,7 @@ if TYPE_CHECKING:
 
     from sglang_omni.model_runner.base import ModelRunner
     from sglang_omni.model_runner.model_worker import ModelWorker
+    from sglang_omni.model_runner.weight_checker import WeightCheckResult
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ class _RequiredAdminActionResult(TypedDict):
 
 
 class _AdminActionResult(_RequiredAdminActionResult, total=False):
-    data: dict[str, Any]
+    data: dict[str, Any] | WeightCheckResult
     error: str | None
 
 

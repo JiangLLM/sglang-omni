@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from sglang.srt.configs.model_config import ModelConfig
     from sglang.srt.server_args import ServerArgs
 
+    from sglang_omni.model_runner.weight_checker import WeightCheckResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -476,7 +478,7 @@ class ModelWorker:
                 )
         return bool(success), str(message)
 
-    def weights_checker(self, action: str) -> dict[str, Any]:
+    def weights_checker(self, action: str) -> WeightCheckResult:
         checker = getattr(self, "_strict_weight_checker", None)
         if checker is None:
             from sglang_omni.model_runner.weight_checker import StrictWeightChecker
@@ -529,8 +531,7 @@ def _apply_model_worker_backend_common_policy(
     )
     if is_qwen3_omni_arch and cfg.ep_size != 1:
         raise ValueError(
-            "Qwen3-Omni ModelWorker does not support expert parallelism; "
-            "use ep_size=1."
+            "Qwen3-Omni ModelWorker does not support expert parallelism; use ep_size=1."
         )
 
 
