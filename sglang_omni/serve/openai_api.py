@@ -757,7 +757,7 @@ async def _chat_non_stream(
     requested_modalities = req.modalities or ["text"]
 
     # Build message content
-    message: dict[str, Any] = {"role": "assistant"}
+    message: dict[str, str | dict[str, str | None]] = {"role": "assistant"}
 
     if "text" in requested_modalities and result.text:
         message["content"] = result.text
@@ -1006,7 +1006,7 @@ def _build_chat_generate_request(req: ChatCompletionRequest) -> GenerateRequest:
         _explicit_generation_params(req),
     )
 
-    extra_params: dict[str, Any] = {}
+    extra_params: dict[str, int | float] = {}
     for field_name, value in (
         ("talker_temperature", req.talker_temperature),
         ("talker_top_p", req.talker_top_p),
@@ -1114,7 +1114,7 @@ def _build_rollout_generate_request(req: RolloutGenerateRequest) -> GenerateRequ
             for name, params in req.stage_sampling.items()
         }
 
-    extra_params: dict[str, Any] = {
+    extra_params: dict[str, bool] = {
         "return_logprob": req.return_logprob,
         "return_omni_rollout": req.return_omni_rollout,
         "return_routed_experts": req.return_routed_experts,
