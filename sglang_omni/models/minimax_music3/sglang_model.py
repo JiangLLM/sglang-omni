@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from types import MethodType
-from typing import Any
+from typing import Any, Protocol
 
 import torch
 from torch import nn
@@ -19,6 +20,25 @@ logger = logging.getLogger(__name__)
 
 _AUDIO_EMBEDDING_KEY = "model.audio_extra_embedding.weight"
 _C0_VOCAB_SIZE = 16384
+
+
+class _C0LogitModel(Protocol):
+    @property
+    def c0_logit_ids(self) -> torch.Tensor: ...
+
+
+class _IndexedLayers(Protocol):
+    def __getitem__(self, index: int, /) -> object: ...
+
+
+class _LayerCollection(Protocol):
+    @property
+    def layers(self) -> Iterable[object] | _IndexedLayers: ...
+
+
+class _LayerModel(Protocol):
+    @property
+    def model(self) -> _LayerCollection: ...
 
 
 def attach_minimax_modules(model: Any, checkpoint_root: str) -> None:
@@ -114,7 +134,7 @@ def apply_cfg(cond: torch.Tensor, uncond: torch.Tensor) -> torch.Tensor:
     return guided.masked_fill(cond < threshold, -float("inf"))
 
 
-def select_c0_logits(model: Any, logits: torch.Tensor) -> torch.Tensor:
+def select_c0_logits(model: _C0LogitModel, logits: torch.Tensor) -> torch.Tensor:
     """Narrow backbone logits to the only ids c0 sampling can ever return.
 
     Returns [rows, 1 + 16384] in vocabulary order: <|audio_end|> first,
@@ -244,7 +264,7 @@ def _forward_prepare_unfused_qk_norm(self, positions, hidden_states):
     return q, k, v
 
 
-def _use_unfused_qk_norm(model: Any) -> None:
+def _use_unfused_qk_norm(model: _LayerModel) -> None:
     """Keep QK norm, but off flashinfer's fused in-place kernel."""
     for layer in model.model.layers:
         attention = getattr(layer, "self_attn", None)
