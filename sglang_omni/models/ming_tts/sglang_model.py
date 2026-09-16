@@ -95,7 +95,7 @@ class MingTTSTailOutputs:
 
 
 class _MingTTSTailGraph:
-    def __init__(self, model: Any, batch_size: int) -> None:
+    def __init__(self, model: MingTTSSGLangModel, batch_size: int) -> None:
         self.model = model
         self.batch_size = int(batch_size)
         self.graph: torch.cuda.CUDAGraph | None = None
@@ -193,7 +193,7 @@ class _MingTTSTailGraph:
 
 
 class _MingTTSTailGraphCache:
-    def __init__(self, model: Any) -> None:
+    def __init__(self, model: MingTTSSGLangModel) -> None:
         self.model = model
         self.graphs: dict[int, _MingTTSTailGraph] = {}
         self.buckets: tuple[int, ...] = ()
@@ -559,7 +559,7 @@ class MingBailingMoeDecoderLayer(nn.Module):
         )
 
     @staticmethod
-    def _is_layer_sparse(config: Any, layer_id: int) -> bool:
+    def _is_layer_sparse(config: object, layer_id: int) -> bool:
         return getattr(config, "num_experts", None) is not None and layer_id >= int(
             getattr(config, "first_k_dense_replace", 0) or 0
         )
@@ -988,7 +988,7 @@ class MingTTSSGLangModel(nn.Module):
         positions: torch.Tensor,
         forward_batch: ForwardBatch,
         input_embeds: Optional[torch.Tensor] = None,
-        pp_proxy_tensors: Any = None,
+        pp_proxy_tensors: object = None,
     ) -> LogitsProcessorOutput:
         del pp_proxy_tensors
 
