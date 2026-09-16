@@ -34,8 +34,8 @@ class SGLangARRequestData(ARRequestData):
     pending_codec_rows: list["torch.Tensor"] = field(default_factory=list)
     codec_first_flush_done: bool = False
     codec_frames_seen: int = 0
-    tts_pad_embed: Any = None
-    tts_eos_embed: Any = None
+    tts_pad_embed: torch.Tensor | None = None
+    tts_eos_embed: torch.Tensor | None = None
     thinker_chunks_done: bool = True
 
 
