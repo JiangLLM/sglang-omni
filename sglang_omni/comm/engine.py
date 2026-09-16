@@ -132,7 +132,7 @@ class CommEngine:
         self._send_queues: dict[
             str, asyncio.Queue[_PayloadSendJob | _StreamSendJob]
         ] = {}
-        self._send_workers: dict[str, asyncio.Task] = {}
+        self._send_workers: dict[str, asyncio.Task[None]] = {}
         self._pending: dict[str, _PendingTransfer] = {}
         self._stream_send_sequence = count()
         # Failed pending KV transfers stay pinned until this dying process exits.
@@ -145,7 +145,7 @@ class CommEngine:
         self._aborted_kv_requests: set[str] = set()
         self._rank_recv_socket: PullSocket | None = None
         self._rank_send_sockets: dict[str, PushSocket] = {}
-        self._rank_control_task: asyncio.Task | None = None
+        self._rank_control_task: asyncio.Task[None] | None = None
         self._rank_receive_tasks: set[asyncio.Task[None]] = set()
         self._task_done_callback = task_done_callback
         self._closed = False
@@ -1017,7 +1017,7 @@ class CommEngine:
         ops: list[RelayOperation],
         chunk_id: int | None = None,
         replica_bindings: dict[str, int] | None = None,
-    ) -> asyncio.Task:
+    ) -> asyncio.Task[bool]:
         """Publish a relay object and arm its existing ACK lifecycle."""
 
         object_id = data_ref.object_id
@@ -1044,7 +1044,7 @@ class CommEngine:
         data_ref: DataRef,
         chunk_id: int | None = None,
         replica_bindings: dict[str, int] | None = None,
-    ) -> asyncio.Task:
+    ) -> asyncio.Task[bool]:
         object_id = data_ref.object_id
         try:
             await control_plane.send_to_stage(
