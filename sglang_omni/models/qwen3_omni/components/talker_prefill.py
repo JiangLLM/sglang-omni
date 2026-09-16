@@ -21,6 +21,7 @@ from sglang_omni.models.qwen3_omni.pending_text_queue import (
     coerce_pending_text_queue,
 )
 from sglang_omni.models.weight_loader import resolve_model_path
+from sglang_omni.proto import StagePayload
 
 _THINKER_EMBED_CANDIDATE_KEYS = (
     "thinker.model.embed_tokens.weight",
@@ -29,7 +30,7 @@ _THINKER_EMBED_CANDIDATE_KEYS = (
 
 
 _EMBED_SOURCE_CACHE: dict[str, tuple[Path, str]] = {}
-_EMBED_HANDLE_CACHE: dict[str, Any] = {}
+_EMBED_HANDLE_CACHE: dict[str, safe_open] = {}
 
 
 def _resolve_embed_source(model_path: str) -> tuple[Path, str]:
@@ -74,7 +75,7 @@ def load_thinker_embedding_rows(model_path: str, row_ids: list[int]) -> torch.Te
     return torch.stack(rows, dim=0)
 
 
-def coerce_feature_tensor(value: Any) -> torch.Tensor | None:
+def coerce_feature_tensor(value: object) -> torch.Tensor | None:
     if value is None:
         return None
     if isinstance(value, torch.Tensor):
@@ -100,7 +101,7 @@ def merge_prompt_modality(
     prompt_hidden: torch.Tensor,
     *,
     token_id: int | None,
-    features: Any,
+    features: object,
 ) -> None:
     if token_id is None:
         return
@@ -191,7 +192,7 @@ class TalkerPrefillBuilder:
 
     def build_prompt_prefill(
         self,
-        payload,
+        payload: StagePayload,
         thinker_chunks: list[Any],
         *,
         thinker_done: bool,
