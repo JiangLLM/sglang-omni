@@ -15,7 +15,7 @@ from contextlib import AbstractContextManager
 from copy import deepcopy
 from dataclasses import dataclass
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias, TypedDict
 
 import torch
 
@@ -102,9 +102,13 @@ class Code2WavRunResult:
     fallback_reason: str | None
 
 
+class _ReplayableGraph(Protocol):
+    def replay(self) -> object: ...
+
+
 @dataclass(slots=True)
 class _CapturedGraph:
-    graph: Any
+    graph: _ReplayableGraph
     static_input: torch.Tensor
     static_output: torch.Tensor
 
