@@ -7,8 +7,9 @@ import asyncio
 import base64
 import logging
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import av
 import librosa
@@ -22,6 +23,11 @@ from torchvision.transforms import functional as tv_f
 from .base import MediaIO, _is_url
 from .cache_key import compute_media_cache_key
 from .resource_connector import global_thread_pool
+
+if TYPE_CHECKING:
+    from .resource_connector import MultiModalResourceConnector
+
+_VideoInputValueT = TypeVar("_VideoInputValueT")
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +50,7 @@ class VideoMediaIO(MediaIO[tuple[torch.Tensor, float, npt.NDArray[np.float32] | 
         image_mode: str = "RGB",
         extract_audio: bool = False,
         audio_target_sr: int = 16000,
-        **kwargs,
+        **kwargs: object,
     ) -> None:
         """Initialize VideoMediaIO.
 
@@ -139,10 +145,10 @@ async def ensure_video_list_async(
     max_pixels: int | None = None,
     total_pixels: int | None = None,
     image_mode: str = "RGB",
-    resource_connector: Any | None = None,
+    resource_connector: MultiModalResourceConnector | None = None,
     extract_audio: bool = False,
     audio_target_sr: int = 16000,
-) -> tuple[list[Any], list[float] | None, list[Any] | None]:
+) -> tuple[list[Any], list[float] | None, list[npt.NDArray[np.float32] | None] | None]:
     """Asynchronously normalize video inputs into a list.
 
     Args:
@@ -170,7 +176,7 @@ async def ensure_video_list_async(
         items = [videos]
     normalized: list[Any] = []
     sample_fps_list: list[float] = []
-    extracted_audios: list[Any] = [] if extract_audio else []
+    extracted_audios: list[npt.NDArray[np.float32] | None] = [] if extract_audio else []
     all_paths = True
 
     # Import here to avoid circular dependency
@@ -181,7 +187,7 @@ async def ensure_video_list_async(
 
     async def _load_video_with_audio(
         video_item: str | Path, is_url: bool
-    ) -> tuple[Any, float, Any | None]:
+    ) -> tuple[torch.Tensor, float, npt.NDArray[np.float32] | None]:
         """Load video and optionally extract audio."""
         loop = asyncio.get_running_loop()
 
@@ -236,7 +242,9 @@ async def ensure_video_list_async(
                 return video, sample_fps, None
 
     # Collect coroutines for URL and local file items
-    coroutines: list[asyncio.Task[tuple[Any, float, Any | None]] | None] = []
+    coroutines: list[
+        asyncio.Task[tuple[torch.Tensor, float, npt.NDArray[np.float32] | None]]
+    ] = []
     url_indices: list[int] = []
 
     # First pass: identify items that need loading
@@ -383,7 +391,9 @@ def load_video_path(
     return video, sample_fps
 
 
-def build_video_mm_inputs(hf_inputs: dict[str, Any]) -> dict[str, Any]:
+def build_video_mm_inputs(
+    hf_inputs: Mapping[str, _VideoInputValueT],
+) -> dict[str, _VideoInputValueT | None]:
     return {
         "pixel_values_videos": hf_inputs.get("pixel_values_videos"),
         "video_grid_thw": hf_inputs.get("video_grid_thw"),
@@ -392,7 +402,7 @@ def build_video_mm_inputs(hf_inputs: dict[str, Any]) -> dict[str, Any]:
 
 
 def compute_video_cache_key(
-    videos: Any,
+    videos: object,
     *,
     fps: float | None = None,
     max_frames: int | None = None,
