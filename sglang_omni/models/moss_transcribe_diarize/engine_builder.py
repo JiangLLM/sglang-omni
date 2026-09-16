@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from sglang.srt.managers.mm_utils import init_mm_embedding_cache
 
@@ -16,6 +16,17 @@ from sglang_omni.scheduling.generation_batch_policy import (
     CudaGraphBackend,
     build_default_prefill_cuda_graph_bs,
 )
+
+if TYPE_CHECKING:
+    from sglang.srt.server_args import ServerArgs
+
+    from sglang_omni.models.moss_transcribe_diarize.request_builders import (
+        MossTranscribeDiarizeRequestData,
+    )
+    from sglang_omni.models.moss_transcribe_diarize.sglang_model import (
+        MossTranscribeDiarizeForConditionalGeneration,
+    )
+    from sglang_omni.proto import StagePayload
 
 
 class MossTranscribeDiarizeEngineBuilder(AsrEngineBuilder):
@@ -133,15 +144,15 @@ class MossTranscribeDiarizeEngineBuilder(AsrEngineBuilder):
         if "context_length" in overrides:
             self.context_length = int(overrides.pop("context_length"))
 
-    def customize_server_args(self, server_args: Any) -> None:
+    def customize_server_args(self, server_args: ServerArgs) -> None:
         # note (Dayuxiaoshui): adapters must use the context length finalized by
         # ServerArgs, matching the pre-refactor factory behavior.
         self.context_length = int(server_args.context_length)
 
     def setup_model_resources(
         self,
-        model: Any,
-        server_args: Any,
+        model: MossTranscribeDiarizeForConditionalGeneration,
+        server_args: object,
         *,
         generation_cuda_graph_enabled: bool,
     ) -> None:
@@ -154,14 +165,21 @@ class MossTranscribeDiarizeEngineBuilder(AsrEngineBuilder):
         init_mm_embedding_cache(self.mm_embedding_cache_size_bytes)
         model.init_encoder_cache(self.encoder_cache_size_bytes)
 
-    def setup_runtime_resources(self, model: Any, server_args: Any) -> None:
+    def setup_runtime_resources(
+        self, model: MossTranscribeDiarizeForConditionalGeneration, server_args: object
+    ) -> None:
         del server_args
         self.audio_encoder_service = BatchedAudioEncoderService(
             model,
             max_batch_size=self.encoder_max_batch_size,
         )
 
-    def make_adapters(self, model: Any) -> tuple[Any, Any]:
+    def make_adapters(
+        self, model: object
+    ) -> tuple[
+        Callable[[StagePayload], MossTranscribeDiarizeRequestData],
+        Callable[[MossTranscribeDiarizeRequestData], StagePayload],
+    ]:
         del model
         return request_builders.make_moss_transcribe_diarize_scheduler_adapters(
             processor=self.processor,

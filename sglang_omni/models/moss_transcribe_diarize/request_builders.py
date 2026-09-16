@@ -8,7 +8,8 @@ import math
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Callable
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 import numpy as np
 import torch
@@ -27,6 +28,16 @@ from sglang_omni.scheduling.sglang_backend import SGLangARRequestData
 from sglang_omni.scheduling.token_text_streaming import (
     make_token_text_stream_output_builder,
 )
+
+if TYPE_CHECKING:
+    from sglang_omni.models.moss_transcribe_diarize.encoder_service import (
+        BatchedAudioEncoderService,
+    )
+    from sglang_omni.scheduling.types import RequestOutput
+
+_MetadataValueT = TypeVar("_MetadataValueT")
+_SamplingValueT = TypeVar("_SamplingValueT")
+_SamplingResultT = TypeVar("_SamplingResultT")
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +87,7 @@ class MossTranscribeDiarizeRequestData(SGLangARRequestData):
     enforce_request_limits: bool = True
 
 
-def _only_audio(value: Any) -> Any:
+def _only_audio(value: object) -> object:
     if isinstance(value, (list, tuple)):
         if len(value) != 1:
             raise ValueError(
@@ -87,7 +98,7 @@ def _only_audio(value: Any) -> Any:
     return value
 
 
-def _audio_source_from_payload(payload: StagePayload) -> Any:
+def _audio_source_from_payload(payload: StagePayload) -> object:
     """Extended source resolver: MOSS accepts more sources than the shared
     default (``audio_data``, single-item ``audios`` lists, metadata fallbacks,
     and ``{"data"|"path"|"url": ...}`` dict entries)."""
@@ -123,7 +134,7 @@ def _has_metadata_audio_source(payload: StagePayload) -> bool:
     )
 
 
-def _unwrap_source_dict(source: Any) -> Any:
+def _unwrap_source_dict(source: object) -> object:
     if isinstance(source, dict):
         if source.get("data") is not None:
             return source["data"]
@@ -134,7 +145,7 @@ def _unwrap_source_dict(source: Any) -> Any:
     return source
 
 
-def _explicit_generation_fields(metadata: dict[str, Any]) -> set[str]:
+def _explicit_generation_fields(metadata: dict[str, _MetadataValueT]) -> set[str]:
     """Sampling fields the caller set explicitly (see EXPLICIT_GENERATION_PARAMS_KEY).
 
     Anything not listed here resolves to the model's own default, so a client
@@ -148,12 +159,12 @@ def _explicit_generation_fields(metadata: dict[str, Any]) -> set[str]:
 
 
 def _sampling_param(
-    params: dict[str, Any],
+    params: dict[str, _SamplingValueT],
     explicit_fields: set[str],
     field: str,
-    default: Any,
-    cast: Callable[[Any], Any],
-) -> Any:
+    default: _SamplingResultT,
+    cast: Callable[[Any], _SamplingResultT],
+) -> _SamplingResultT:
     if field not in explicit_fields:
         return default
     value = params.get(field)
@@ -325,10 +336,10 @@ def make_moss_transcribe_diarize_scheduler_adapters(
     max_new_tokens: int,
     context_length: int,
     duration_scaled_default: bool = True,
-    audio_encoder_service: Any | None = None,
+    audio_encoder_service: BatchedAudioEncoderService | None = None,
 ) -> tuple[
     Callable[[StagePayload], MossTranscribeDiarizeRequestData],
-    Callable[[Any], StagePayload],
+    Callable[[MossTranscribeDiarizeRequestData], StagePayload],
 ]:
     audio_token_id = int(
         getattr(processor, "audio_token_id", None)
@@ -585,7 +596,9 @@ def make_moss_transcribe_diarize_stream_output_builder(
     tokenizer: Any,
     eos_token_id: int | None = None,
     min_emit_interval_s: float = 0.0,
-) -> Callable[[str, Any, Any], list[OutgoingMessage]]:
+) -> Callable[
+    [str, SGLangARRequestData, RequestOutput | SimpleNamespace], list[OutgoingMessage]
+]:
     tokenizer_eos = tokenizer.eos_token_id
     resolved_eos = (
         eos_token_id
