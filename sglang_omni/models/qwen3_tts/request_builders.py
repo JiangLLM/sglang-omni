@@ -10,9 +10,9 @@ import json
 import queue
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, TypeVar
 
 import torch
 
@@ -48,8 +48,17 @@ from sglang_omni.utils.audio_payload import audio_data_uri_from_reference
 if TYPE_CHECKING:
     import numpy as np
     import numpy.typing as npt
+    from qwen_tts import Qwen3TTSModel, Qwen3TTSTokenizer
+
+    from sglang_omni.models.qwen3_tts.prompt_frontend import Qwen3TTSPromptFrontend
+    from sglang_omni.models.qwen3_tts.sglang_model import Qwen3TTSTalker
+
+    _PromptModel = Qwen3TTSTalker | Qwen3TTSPromptFrontend
 
 _RefCodeT = TypeVar("_RefCodeT")
+_ReferenceValueT = TypeVar("_ReferenceValueT")
+_ParamValueT = TypeVar("_ParamValueT")
+_TTSParamValueT = TypeVar("_TTSParamValueT")
 
 QWEN3_TTS_DEFAULT_MAX_NEW_TOKENS = 2048
 QWEN3_TTS_TASK_BASE = "Base"
@@ -86,7 +95,7 @@ def _new_qwen3_tts_sampling_seed() -> int:
     return new_random_sampling_seed()
 
 
-def _normalize_qwen3_tts_seed(seed: Any) -> int:
+def _normalize_qwen3_tts_seed(seed: object) -> int:
     if isinstance(seed, bool):
         raise ValueError("Qwen3-TTS seed must be an integer")
     if isinstance(seed, float) and not seed.is_integer():
@@ -196,13 +205,13 @@ class Qwen3TTSPreparedRequest:
     prompt_input_embeds: torch.Tensor
     tts_pad_embed: torch.Tensor
     gen_kwargs: dict[str, Any]
-    ready_event: Any = None
+    ready_event: torch.cuda.Event | None = None
 
 
 @dataclass
 class Qwen3TTSPreprocessingContext:
-    model: Any
-    wrapper: Any
+    model: _PromptModel
+    wrapper: Qwen3TTSModel
     # Note (Jiaxin Deng): True when preprocessing runs outside the engine process,
     # so prepared tensors travel in the payload instead of the module registry.
     standalone: bool = False
@@ -222,8 +231,8 @@ _PREPARED_REQUESTS_LOCK = threading.Lock()
 
 def set_qwen3_tts_preprocessing_context(
     *,
-    model: Any,
-    wrapper: Any,
+    model: _PromptModel,
+    wrapper: Qwen3TTSModel,
     standalone: bool = False,
     device: torch.device | None = None,
     reference_encoder_graph_bucket_frames: Sequence[int] = (
@@ -448,7 +457,7 @@ def build_qwen3_tts_state(
     )
 
 
-def normalize_qwen3_tts_inputs(inputs: Any) -> tuple[str, list[dict[str, Any]]]:
+def normalize_qwen3_tts_inputs(inputs: object) -> tuple[str, list[dict[str, Any]]]:
     if isinstance(inputs, str):
         return inputs, []
     if isinstance(inputs, dict):
@@ -484,8 +493,8 @@ def resolve_voice_clone_reference(
 
 
 def has_voice_clone_reference(
-    references: list[dict[str, Any]],
-    tts_params: dict[str, Any],
+    references: list[dict[str, _ReferenceValueT]],
+    tts_params: dict[str, _TTSParamValueT],
 ) -> bool:
     if references_contain_audio(references) or references_contain_text(references):
         return True
@@ -495,7 +504,7 @@ def has_voice_clone_reference(
     )
 
 
-def references_contain_audio(references: list[dict[str, Any]]) -> bool:
+def references_contain_audio(references: list[dict[str, _ReferenceValueT]]) -> bool:
     return any(
         reference.get(key) is not None
         for reference in references
@@ -503,12 +512,12 @@ def references_contain_audio(references: list[dict[str, Any]]) -> bool:
     )
 
 
-def references_contain_text(references: list[dict[str, Any]]) -> bool:
+def references_contain_text(references: list[dict[str, _ReferenceValueT]]) -> bool:
     return any(reference.get("text") is not None for reference in references)
 
 
 def normalize_qwen3_tts_task_type(
-    task_type: Any,
+    task_type: object,
     *,
     has_reference: bool,
 ) -> str:
@@ -526,14 +535,14 @@ def normalize_qwen3_tts_task_type(
     )
 
 
-def resolve_optional_text(value: Any) -> str | None:
+def resolve_optional_text(value: object) -> str | None:
     if value is None:
         return None
     text = str(value).strip()
     return text or None
 
 
-def normalize_qwen3_tts_voice(value: Any) -> str | None:
+def normalize_qwen3_tts_voice(value: object) -> str | None:
     voice = resolve_optional_text(value)
     if voice is None or voice.lower() == "default":
         return None
@@ -541,8 +550,8 @@ def normalize_qwen3_tts_voice(value: Any) -> str | None:
 
 
 def has_param(
-    tts_params: dict[str, Any],
-    params: dict[str, Any],
+    tts_params: dict[str, _TTSParamValueT],
+    params: dict[str, _ParamValueT],
     name: str,
 ) -> bool:
     return name in tts_params or name in params
@@ -551,8 +560,8 @@ def has_param(
 def resolve_non_streaming_mode(
     *,
     task_type: str,
-    params: dict[str, Any],
-    tts_params: dict[str, Any],
+    params: dict[str, _ParamValueT],
+    tts_params: dict[str, _TTSParamValueT],
 ) -> bool:
     for source in (params, tts_params):
         if "non_streaming_mode" in source:
@@ -562,8 +571,8 @@ def resolve_non_streaming_mode(
 
 def resolve_stream_codec_output(
     *,
-    params: dict[str, Any],
-    tts_params: dict[str, Any],
+    params: dict[str, _ParamValueT],
+    tts_params: dict[str, _TTSParamValueT],
     default: bool = True,
 ) -> bool:
     # Note (Jiaxin Deng): non_streaming_mode is still honoured as a fallback so the
@@ -603,8 +612,8 @@ def resolve_bootstrap_silence_suppression(
     language: str,
     instructions: str | None,
     stream_codec_output: bool,
-    params: dict[str, Any],
-    tts_params: dict[str, Any],
+    params: dict[str, _ParamValueT],
+    tts_params: dict[str, _TTSParamValueT],
 ) -> bool:
     for source in (params, tts_params):
         if "suppress_bootstrap_silence" in source:
@@ -632,7 +641,7 @@ def resolve_bootstrap_silence_suppression(
     return True
 
 
-def normalize_language(language: Any) -> str:
+def normalize_language(language: object) -> str:
     if language is None or language == "":
         return "auto"
     return str(language)
@@ -640,8 +649,8 @@ def normalize_language(language: Any) -> str:
 
 def resolve_x_vector_only_mode(
     *,
-    params: dict[str, Any],
-    tts_params: dict[str, Any],
+    params: dict[str, _ParamValueT],
+    tts_params: dict[str, _TTSParamValueT],
     ref_text: str | None,
 ) -> bool:
     for source in (params, tts_params):
@@ -698,7 +707,7 @@ def build_embedding_cache_key_ids(input_embeds: torch.Tensor) -> list[int]:
     return key_ids
 
 
-def _build_qwen3_tts_pad_embed(model: Any) -> torch.Tensor:
+def _build_qwen3_tts_pad_embed(model: _PromptModel) -> torch.Tensor:
     feedback_buffer = model.model._feedback_buffer
     with torch.no_grad():
         return (
@@ -740,13 +749,24 @@ def _qwen3_tts_uploaded_voice_cache_key(state: Qwen3TTSState) -> SpeakerCacheKey
     )
 
 
+class _OptionalCachedVoicePrompt(TypedDict, total=False):
+    ref_code: tuple[torch.Tensor, ...]
+
+
+class _CachedVoicePrompt(_OptionalCachedVoicePrompt):
+    artifact_type: Literal["qwen3_tts_voice_clone_prompt"]
+    ref_spk_embedding: tuple[torch.Tensor, ...]
+    icl_mode: tuple[bool, ...]
+    ref_text: str | None
+
+
 def _cacheable_qwen3_tts_voice_prompt(
     voice_clone_prompt: dict[str, Any],
     *,
     ref_text: str | None,
-) -> dict[str, Any]:
+) -> _CachedVoicePrompt:
     ref_codes = voice_clone_prompt.get("ref_code")
-    artifact: dict[str, Any] = {
+    artifact: _CachedVoicePrompt = {
         "artifact_type": "qwen3_tts_voice_clone_prompt",
         "ref_spk_embedding": tuple(
             _cacheable_qwen3_tts_tensor(embedding)
@@ -767,7 +787,7 @@ def _cacheable_qwen3_tts_tensor(value: torch.Tensor) -> torch.Tensor:
 
 
 def _qwen3_tts_voice_prompt_from_cache(
-    artifact: dict[str, Any],
+    artifact: dict[str, Any] | _CachedVoicePrompt,
 ) -> tuple[dict[str, Any], str | None] | None:
     if artifact.get("artifact_type") != "qwen3_tts_voice_clone_prompt":
         return None
@@ -808,7 +828,7 @@ def _record_ref_code_consumer_stream(ref_code: _RefCodeT) -> _RefCodeT:
 class _Qwen3TTSRefCodeBatcher:
     def __init__(
         self,
-        speech_tokenizer: Any,
+        speech_tokenizer: Qwen3TTSTokenizer,
         *,
         max_batch_size: int = 8,
         max_batch_wait_ms: float = 2.0,
@@ -964,7 +984,7 @@ class _Qwen3TTSAdhocReferenceHook(
     KeyedReferenceEncodeHook[
         _Qwen3TTSAdhocReferenceInput,
         tuple[dict[str, Any], str | None],
-        dict[str, Any],
+        _CachedVoicePrompt,
     ]
 ):
     model_id = "qwen3_tts"
@@ -974,8 +994,8 @@ class _Qwen3TTSAdhocReferenceHook(
     def __init__(
         self,
         *,
-        model: Any,
-        wrapper: Any,
+        model: _PromptModel,
+        wrapper: Qwen3TTSModel,
         graph_bucket_frames: Sequence[int] = (),
     ) -> None:
         self._model = model
@@ -987,7 +1007,7 @@ class _Qwen3TTSAdhocReferenceHook(
         self.model_revision = _qwen3_tts_model_revision(model, wrapper)
         self.encoder_config_hash = _qwen3_tts_encoder_config_hash(model, wrapper)
 
-    def normalize_input(self, raw_input: Any) -> _Qwen3TTSAdhocReferenceInput:
+    def normalize_input(self, raw_input: object) -> _Qwen3TTSAdhocReferenceInput:
         if isinstance(raw_input, _Qwen3TTSAdhocReferenceInput):
             return raw_input
         if not isinstance(raw_input, Qwen3TTSState):
@@ -1058,7 +1078,9 @@ class _Qwen3TTSAdhocReferenceHook(
         }
         return voice_clone_prompt, item.ref_text
 
-    def store_artifact(self, artifact: tuple[dict[str, Any], str | None]) -> dict:
+    def store_artifact(
+        self, artifact: tuple[dict[str, Any], str | None]
+    ) -> _CachedVoicePrompt:
         voice_clone_prompt, ref_text = artifact
         return _cacheable_qwen3_tts_voice_prompt(
             voice_clone_prompt,
@@ -1066,7 +1088,7 @@ class _Qwen3TTSAdhocReferenceHook(
         )
 
     def load_artifact(
-        self, stored: dict[str, Any]
+        self, stored: dict[str, Any] | _CachedVoicePrompt
     ) -> tuple[dict[str, Any], str | None]:
         cached_prompt = _qwen3_tts_voice_prompt_from_cache(stored)
         if cached_prompt is None:
@@ -1074,7 +1096,7 @@ class _Qwen3TTSAdhocReferenceHook(
         return cached_prompt
 
 
-def _qwen3_tts_ref_audio_input_key(ref_audio: Any) -> str | None:
+def _qwen3_tts_ref_audio_input_key(ref_audio: object) -> str | None:
     if isinstance(ref_audio, str):
         if ref_audio.startswith("data:"):
             return f"data:{_hash_bytes(ref_audio.encode('utf-8'))}"
@@ -1088,7 +1110,7 @@ def _qwen3_tts_ref_audio_input_key(ref_audio: Any) -> str | None:
     return None
 
 
-def _qwen3_tts_model_revision(model: Any, wrapper: Any) -> str:
+def _qwen3_tts_model_revision(model: object, wrapper: object) -> str:
     processor = getattr(wrapper, "processor", None)
     candidates = (
         getattr(model, "name_or_path", None),
@@ -1103,7 +1125,7 @@ def _qwen3_tts_model_revision(model: Any, wrapper: Any) -> str:
     return type(model).__module__ + "." + type(model).__qualname__
 
 
-def _qwen3_tts_encoder_config_hash(model: Any, wrapper: Any) -> str:
+def _qwen3_tts_encoder_config_hash(model: object, wrapper: object) -> str:
     processor = getattr(wrapper, "processor", None)
     parts = [
         type(model).__module__ + "." + type(model).__qualname__,
@@ -1116,8 +1138,8 @@ def _qwen3_tts_encoder_config_hash(model: Any, wrapper: Any) -> str:
 
 
 def _get_qwen3_tts_adhoc_reference_service_locked(
-    model: Any,
-    wrapper: Any,
+    model: _PromptModel,
+    wrapper: Qwen3TTSModel,
     *,
     graph_bucket_frames: Sequence[int] = (
         DEFAULT_QWEN3_TTS_REFERENCE_ENCODER_BUCKET_FRAMES
@@ -1146,14 +1168,14 @@ def _get_qwen3_tts_adhoc_reference_service_locked(
 
 
 def _get_qwen3_tts_adhoc_reference_service(
-    model: Any,
-    wrapper: Any,
+    model: _PromptModel,
+    wrapper: Qwen3TTSModel,
 ) -> ReferenceEncodeService:
     with _PREPARED_REQUESTS_LOCK:
         return _get_qwen3_tts_adhoc_reference_service_locked(model, wrapper)
 
 
-def _normalized_model_type(model: Any) -> str:
+def _normalized_model_type(model: object) -> str:
     model_type = getattr(model, "tts_model_type", None)
     if model_type is None:
         model_type = getattr(
@@ -1167,7 +1189,7 @@ def _normalized_model_type(model: Any) -> str:
     return normalized
 
 
-def _validate_qwen3_tts_model_task(model: Any, state: Qwen3TTSState) -> None:
+def _validate_qwen3_tts_model_task(model: object, state: Qwen3TTSState) -> None:
     model_type = _normalized_model_type(model)
     if model_type == "base" and state.task_type != QWEN3_TTS_TASK_BASE:
         if not state.task_type_explicit:
@@ -1191,8 +1213,8 @@ def _validate_qwen3_tts_model_task(model: Any, state: Qwen3TTSState) -> None:
 def _prepare_qwen3_tts_base_request(
     *,
     state: Qwen3TTSState,
-    model: Any,
-    wrapper: Any,
+    model: _PromptModel,
+    wrapper: Qwen3TTSModel,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
     speaker_cache = get_speaker_artifact_cache()
     cache_key = _qwen3_tts_uploaded_voice_cache_key(state)
@@ -1280,8 +1302,8 @@ def _prepare_qwen3_tts_voice_design_request(
 def _prepare_qwen3_tts_request(
     payload: StagePayload,
     *,
-    model: Any,
-    wrapper: Any,
+    model: _PromptModel,
+    wrapper: Qwen3TTSModel,
     default_stream_codec_output: bool = True,
 ) -> Qwen3TTSPreparedRequest:
     state = build_qwen3_tts_state(
@@ -1438,7 +1460,7 @@ def _store_prepared_qwen3_tts_payload(
 
 
 def _load_prepared_qwen3_tts_request(
-    payload: StagePayload, *, model: Any
+    payload: StagePayload, *, model: _PromptModel | None
 ) -> Qwen3TTSPreparedRequest | None:
     """Inverse of _store_prepared_qwen3_tts_payload; clears the fields it consumed."""
 
@@ -1479,8 +1501,8 @@ def _load_prepared_qwen3_tts_request(
 def build_sglang_qwen3_tts_request(
     payload: StagePayload,
     *,
-    model: Any,
-    wrapper: Any,
+    model: _PromptModel,
+    wrapper: object,
 ) -> Qwen3TTSSGLangRequestData:
     del wrapper
 
@@ -1638,7 +1660,13 @@ def apply_sglang_qwen3_tts_result(
     )
 
 
-def make_qwen3_tts_scheduler_adapters(*, model: Any, wrapper: Any):
+def make_qwen3_tts_scheduler_adapters(
+    *, model: _PromptModel | None, wrapper: object
+) -> tuple[
+    Callable[[StagePayload], Qwen3TTSSGLangRequestData],
+    Callable[[Qwen3TTSSGLangRequestData], StagePayload],
+    Callable[[str, Qwen3TTSSGLangRequestData, object], list[OutgoingMessage]],
+]:
     """Build StagePayload <-> SGLang request adapters for Qwen3-TTS."""
 
     def request_builder(payload: StagePayload) -> Qwen3TTSSGLangRequestData:
@@ -1654,7 +1682,7 @@ def make_qwen3_tts_scheduler_adapters(*, model: Any, wrapper: Any):
     def stream_output_builder(
         request_id: str,
         data: Qwen3TTSSGLangRequestData,
-        req_output: Any,
+        req_output: object,
     ) -> list[OutgoingMessage]:
         del req_output
         params = data.stage_payload.request.params

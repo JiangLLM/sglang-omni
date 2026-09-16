@@ -39,6 +39,8 @@ class _PromptProjection(nn.Module):
 
 
 class _PromptEmbeddings(nn.Module):
+    _feedback_buffer: torch.Tensor
+
     def __init__(self, config: Any) -> None:
         super().__init__()
         self.codec_embedding = nn.Embedding(config.vocab_size, config.hidden_size)
