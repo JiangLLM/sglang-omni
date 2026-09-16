@@ -16,7 +16,7 @@ import torch
 from .base import MediaIO, _is_url
 
 
-def _decode_audio_bytes_av(data: bytes) -> tuple[np.ndarray, int]:
+def _decode_audio_bytes_av(data: bytes) -> tuple[npt.NDArray[np.float32], int]:
     """Decode audio bytes using PyAV (supports WebM/Opus, MP3, OGG, FLAC, etc.)."""
     import io
 
@@ -52,7 +52,9 @@ def _decode_audio_bytes_av(data: bytes) -> tuple[np.ndarray, int]:
     return audio, int(sample_rate)
 
 
-def _parse_wav_bytes(data: bytes, source: str = "bytes") -> tuple[np.ndarray, int]:
+def _parse_wav_bytes(
+    data: bytes, source: str = "bytes"
+) -> tuple[npt.NDArray[np.float32], int]:
     """Parse PCM/IEEE-float WAV from bytes without external deps."""
     if len(data) < 12:
         raise ValueError(f"Invalid WAV header: {source}")
@@ -124,7 +126,9 @@ def _parse_wav_bytes(data: bytes, source: str = "bytes") -> tuple[np.ndarray, in
     return audio.astype(np.float32, copy=False), int(sample_rate)
 
 
-def _resample_linear(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
+def _resample_linear(
+    audio: np.ndarray, orig_sr: int, target_sr: int
+) -> npt.NDArray[np.float32]:
     if orig_sr == target_sr:
         return audio.astype(np.float32, copy=False)
     if audio.size == 0:
@@ -136,7 +140,9 @@ def _resample_linear(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndar
     return np.interp(new_idx, old_idx, audio).astype(np.float32)
 
 
-def load_audio_path(path: str | Path, *, target_sr: int = 16000) -> np.ndarray:
+def load_audio_path(
+    path: str | Path, *, target_sr: int = 16000
+) -> npt.NDArray[np.float32]:
     with open(path, "rb") as f:
         data = f.read()
     try:
@@ -146,7 +152,7 @@ def load_audio_path(path: str | Path, *, target_sr: int = 16000) -> np.ndarray:
     return _resample_linear(audio, sr, target_sr)
 
 
-class AudioMediaIO(MediaIO[tuple[npt.NDArray, float]]):
+class AudioMediaIO(MediaIO[tuple[npt.NDArray[np.float32], float]]):
     """MediaIO implementation for audio files."""
 
     def __init__(self, *, target_sr: int = 16000, **kwargs) -> None:
@@ -160,7 +166,7 @@ class AudioMediaIO(MediaIO[tuple[npt.NDArray, float]]):
         self.target_sr = target_sr
         self.kwargs = kwargs
 
-    def load_bytes(self, data: bytes) -> tuple[npt.NDArray, float]:
+    def load_bytes(self, data: bytes) -> tuple[npt.NDArray[np.float32], float]:
         """Load audio from raw bytes (WAV, WebM/Opus, MP3, OGG, FLAC, etc.)."""
         try:
             audio, sr = _parse_wav_bytes(data, source="bytes")
@@ -173,11 +179,11 @@ class AudioMediaIO(MediaIO[tuple[npt.NDArray, float]]):
         self,
         media_type: str,
         data: str,
-    ) -> tuple[npt.NDArray, float]:
+    ) -> tuple[npt.NDArray[np.float32], float]:
         """Load audio from base64-encoded data."""
         return self.load_bytes(base64.b64decode(data))
 
-    def load_file(self, filepath: Path) -> tuple[npt.NDArray, float]:
+    def load_file(self, filepath: Path) -> tuple[npt.NDArray[np.float32], float]:
         """Load audio from a local file path (WAV, WebM/Opus, MP3, OGG, FLAC, etc.)."""
         with open(filepath, "rb") as f:
             data = f.read()
@@ -217,7 +223,7 @@ async def ensure_audio_list_async(
         resource_connector = get_global_resource_connector()
 
     # Collect coroutines for URL items
-    coroutines: list[asyncio.Task[tuple[npt.NDArray, float]] | None] = []
+    coroutines: list[asyncio.Task[tuple[npt.NDArray[np.float32], float]] | None] = []
     url_indices: list[int] = []
     normalized: list[Any] = []
 

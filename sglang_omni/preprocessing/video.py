@@ -12,6 +12,8 @@ from typing import Any
 
 import av
 import librosa
+import numpy as np
+import numpy.typing as npt
 import torch
 from qwen_vl_utils import vision_process as qwen_vision
 from torchvision.transforms import InterpolationMode
@@ -28,7 +30,7 @@ class VideoDecodeError(RuntimeError):
     """Raised when video decoding fails."""
 
 
-class VideoMediaIO(MediaIO[tuple[torch.Tensor, float, Any | None]]):
+class VideoMediaIO(MediaIO[tuple[torch.Tensor, float, npt.NDArray[np.float32] | None]]):
     """MediaIO implementation for video files with optional audio extraction."""
 
     def __init__(
@@ -78,7 +80,9 @@ class VideoMediaIO(MediaIO[tuple[torch.Tensor, float, Any | None]]):
             total_pixels=self.total_pixels,
         )
 
-    def load_bytes(self, data: bytes) -> tuple[torch.Tensor, float, Any | None]:
+    def load_bytes(
+        self, data: bytes
+    ) -> tuple[torch.Tensor, float, npt.NDArray[np.float32] | None]:
         """Load video from raw bytes, optionally extracting audio.
 
         Returns:
@@ -108,11 +112,13 @@ class VideoMediaIO(MediaIO[tuple[torch.Tensor, float, Any | None]]):
         self,
         media_type: str,
         data: str,
-    ) -> tuple[torch.Tensor, float, Any | None]:
+    ) -> tuple[torch.Tensor, float, npt.NDArray[np.float32] | None]:
         """Load video from base64-encoded data, optionally extracting audio."""
         return self.load_bytes(base64.b64decode(data))
 
-    def load_file(self, filepath: Path) -> tuple[torch.Tensor, float, Any | None]:
+    def load_file(
+        self, filepath: Path
+    ) -> tuple[torch.Tensor, float, npt.NDArray[np.float32] | None]:
         """Load video from a local file path, optionally extracting audio."""
         if self.extract_audio:
             # Load video and extract audio from the same file
@@ -288,7 +294,9 @@ async def ensure_video_list_async(
     return normalized, None, extracted_audios if extract_audio else None
 
 
-def _extract_audio_from_path(video_path: Path, target_sr: int) -> Any | None:
+def _extract_audio_from_path(
+    video_path: Path, target_sr: int
+) -> npt.NDArray[np.float32] | None:
     """Extract audio from a video file path."""
     if not _check_if_video_has_audio(video_path):
         return None
