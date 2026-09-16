@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import torch
 
@@ -31,6 +32,20 @@ from sglang_omni.scheduling.prepared_request_queue import PreparedRequestQueue
 from sglang_omni.scheduling.streaming_vocoder import INITIAL_CODEC_CHUNK_FRAMES_PARAM
 from sglang_omni.scheduling.types import ARRequestData
 
+if TYPE_CHECKING:
+    from sglang.srt.managers.schedule_batch import Req
+
+    from sglang_omni.models.moss_tts_local.sglang_model import MossTTSLocalSGLangModel
+    from sglang_omni.models.moss_tts_local.stages import (
+        _BatchedReferenceEncoder,
+        _MossLocalReferenceEncoder,
+    )
+
+    _ReferenceEncoder = _BatchedReferenceEncoder | _MossLocalReferenceEncoder
+
+_ParamsT = TypeVar("_ParamsT")
+_TTSParamsT = TypeVar("_TTSParamsT")
+
 _MOSS_TTS_LOCAL_PREPARED_MARKER = "_moss_tts_local_prepared_request"
 _MOSS_TTS_LOCAL_AUDIO_FRAME_RATE = 12.5
 # note (Zhang Yiyang): Each Local AR step emits at most one audio frame;
@@ -45,7 +60,7 @@ class MossTTSLocalSGLangRequestData(ARRequestData):
     """Scheduler-owned request state for MOSS-TTS Local."""
 
     enforce_request_limits: bool = True
-    req: Any = None
+    req: Req | None = None
     synced: bool = False
     generation_steps: int = 0
     # note (Yue Yin): launch-side seeded-sampling step counter (async decode); advances
@@ -53,7 +68,7 @@ class MossTTSLocalSGLangRequestData(ARRequestData):
     sampling_steps: int | None = None
     suppress_tokens: list[int] | None = None
     input_embeds_are_projected: bool = False
-    stage_payload: Any = None
+    stage_payload: StagePayload | None = None
     state: MossTTSLocalState = field(default_factory=MossTTSLocalState)
     model_config: Any = None
     prompt_rows: torch.Tensor | None = None
@@ -89,7 +104,7 @@ class MossTTSLocalPreparedRequest:
 @dataclass
 class _PreprocessingContext:
     processor: Any
-    reference_encoder: Any = None
+    reference_encoder: _ReferenceEncoder | None = None
 
 
 _QUEUE: PreparedRequestQueue[_PreprocessingContext, MossTTSLocalPreparedRequest] = (
@@ -99,7 +114,7 @@ MOSS_STREAM_TRANSPORT_BATCH_FRAMES = 5
 
 
 def set_moss_tts_local_preprocessing_context(
-    *, processor: Any, reference_encoder: Any = None
+    *, processor: Any, reference_encoder: _ReferenceEncoder | None = None
 ) -> None:
     _QUEUE.set_context(
         _PreprocessingContext(processor=processor, reference_encoder=reference_encoder)
@@ -165,10 +180,10 @@ def build_moss_tts_local_state(payload: StagePayload) -> MossTTSLocalState:
 
 
 def build_generation_kwargs(
-    params: dict[str, Any],
+    params: dict[str, _ParamsT],
     *,
-    tts_params: dict[str, Any],
-) -> dict[str, Any]:
+    tts_params: dict[str, _TTSParamsT],
+) -> dict[str, int | float]:
     explicit_generation_params = tts_params.get("explicit_generation_params")
     if isinstance(explicit_generation_params, (list, tuple, set)):
         explicit_fields = {str(field) for field in explicit_generation_params}
@@ -251,7 +266,7 @@ def build_generation_kwargs(
 def _build_processor_message(
     processor: Any,
     state: MossTTSLocalState,
-    reference_encoder: Any = None,
+    reference_encoder: _ReferenceEncoder | None = None,
 ) -> dict[str, Any]:
     ref_audio = state.ref_audio
     if reference_encoder is not None and isinstance(ref_audio, str):
@@ -275,7 +290,7 @@ def _prepare_moss_tts_local_request(
     payload: StagePayload,
     *,
     processor: Any,
-    reference_encoder: Any = None,
+    reference_encoder: _ReferenceEncoder | None = None,
 ) -> MossTTSLocalPreparedRequest:
     state = build_moss_tts_local_state(payload)
     message = _build_processor_message(processor, state, reference_encoder)
@@ -353,7 +368,7 @@ def build_moss_tts_local_stream_metadata(
 def build_sglang_moss_tts_local_request(
     payload: StagePayload,
     *,
-    model: Any,
+    model: MossTTSLocalSGLangModel,
 ) -> MossTTSLocalSGLangRequestData:
     from sglang.srt.managers.schedule_batch import Req
     from sglang.srt.sampling.sampling_params import SamplingParams
@@ -445,7 +460,12 @@ def apply_sglang_moss_tts_local_result(
     )
 
 
-def make_moss_tts_local_scheduler_adapters(*, model: Any):
+def make_moss_tts_local_scheduler_adapters(
+    *, model: MossTTSLocalSGLangModel | None
+) -> tuple[
+    Callable[[StagePayload], MossTTSLocalSGLangRequestData],
+    Callable[[MossTTSLocalSGLangRequestData], StagePayload],
+]:
     """Build StagePayload <-> SGLang request adapters for MOSS-TTS Local."""
 
     def request_builder(payload: StagePayload) -> MossTTSLocalSGLangRequestData:
