@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -33,6 +33,9 @@ from sglang_omni.scheduling.reference_encoder import (
 from sglang_omni.scheduling.simple_scheduler import SimpleScheduler
 from sglang_omni.utils.audio_payload import audio_waveform_payload
 
+if TYPE_CHECKING:
+    from neucodec import NeuCodec
+
 DEFAULT_GGUF_FILENAME = "Audar-TTS-V1-Turbo-Q4_K_M.gguf"
 DEFAULT_CODEC_MODEL = "neuphonic/neucodec"
 REFERENCE_SAMPLE_RATE = 16000
@@ -49,7 +52,7 @@ class _ReferenceInput:
 
 
 @lru_cache(maxsize=None)
-def _load_codec(model: str, revision: str, device: str) -> Any:
+def _load_codec(model: str, revision: str, device: str) -> NeuCodec:
     try:
         from neucodec import NeuCodec
     except ImportError as exc:
@@ -64,7 +67,7 @@ def _codec_lock(model: str, revision: str, device: str) -> threading.Lock:
     return threading.Lock()
 
 
-def _normalize_reference(raw_input: Any) -> _ReferenceInput:
+def _normalize_reference(raw_input: object) -> _ReferenceInput:
     if not isinstance(raw_input, dict):
         raise TypeError("Audar-TTS reference input must be a dict")
     if raw_input.get("audio_path") is not None:
@@ -145,7 +148,7 @@ class _AudarReferenceEncodeHook(TensorReferenceEncodeHook[_ReferenceInput]):
             f"sample_rate:{REFERENCE_SAMPLE_RATE}".encode("utf-8")
         )
 
-    def normalize_input(self, raw_input: Any) -> _ReferenceInput:
+    def normalize_input(self, raw_input: object) -> _ReferenceInput:
         return _normalize_reference(raw_input)
 
     def input_key(self, item: _ReferenceInput) -> str | None:
