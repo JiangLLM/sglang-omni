@@ -2,8 +2,11 @@
 
 This opt-in pipeline connects the existing VoiceChat model implementation to
 pipeline sessions (#2035), the AR streaming-session bridge (#2069), and the
-shared realtime endpoint (#2070). It needs all three dependencies. The default
-offline VoiceChat configuration is unchanged.
+shared realtime endpoint (#2070). This draft branch includes all three dependency
+implementations, so no separate cherry-picks are needed to run the example.
+The PR will remain a draft until all three dependencies merge; it will then be
+rebased onto main and validated against the final APIs. The default offline
+VoiceChat configuration is unchanged.
 
 ## Run
 
