@@ -92,7 +92,7 @@ def typed_stage_kwarg_path(name: str) -> str:
 
 
 def apply_typed_stage_kwargs(
-    factory: Callable[..., Any],
+    factory: Callable[..., object],
     kwargs: dict[str, Any],
     typed_kwargs: Mapping[str, Any],
     *,
@@ -138,10 +138,12 @@ def resolve_stage_factory_arg_defaults(
     global_cfg: PipelineConfig,
     *,
     gpu_id: int | None = None,
-) -> dict[str, Any]:
+) -> dict[str, str | int | float | None]:
     """Return standard factory kwargs used only when the factory declares them."""
 
-    defaults: dict[str, Any] = {"model_path": global_cfg.model_path}
+    defaults: dict[str, str | int | float | None] = {
+        "model_path": global_cfg.model_path
+    }
     if gpu_id is None:
         gpu_id = _resolve_primary_gpu_id(stage_cfg, global_cfg)
     defaults["gpu_id"] = gpu_id
@@ -153,7 +155,7 @@ def resolve_stage_factory_arg_defaults(
 
 
 def resolve_factory_signature_args(
-    factory: Callable[..., Any],
+    factory: Callable[..., object],
     args: dict[str, Any],
     *,
     defaults: Mapping[str, Any],
