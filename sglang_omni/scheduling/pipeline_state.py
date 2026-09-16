@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import MISSING, dataclass, field
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from sglang_omni.proto import StagePayload
 
@@ -88,12 +88,16 @@ def _tensor_from_list(value: Any, _default: object = None) -> torch.Tensor | Non
     return torch.tensor(value)
 
 
-def _tensor_items_to_lists(value: Any) -> list[Any]:
+class _IndexableItems(Protocol):
+    def __getitem__(self, index: int, /) -> object: ...
+
+
+def _tensor_items_to_lists(value: Iterable[object] | _IndexableItems) -> list[Any]:
     return [_tensor_to_list(item) for item in value]
 
 
 def _tensor_items_from_lists(
-    value: Any, _default: object = None
+    value: Iterable[object] | _IndexableItems | None, _default: object = None
 ) -> list[torch.Tensor | None] | None:
     if value is None:
         return None
