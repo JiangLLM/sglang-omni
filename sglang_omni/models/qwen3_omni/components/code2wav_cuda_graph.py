@@ -10,7 +10,7 @@ import math
 import os
 import threading
 from collections import Counter
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import AbstractContextManager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -114,7 +114,7 @@ class _BuildFailure(RuntimeError):
 
 
 @contextlib.contextmanager
-def _unpacked_sequence_mask() -> Iterator[None]:
+def _unpacked_sequence_mask() -> Generator[None, None, None]:
     from transformers import masking_utils
 
     if not _MASK_SWAP_LOCK.acquire(blocking=False):
@@ -134,7 +134,7 @@ def _unpacked_sequence_mask() -> Iterator[None]:
 
 
 @contextlib.contextmanager
-def _xpu_capture_pins() -> Iterator[None]:
+def _xpu_capture_pins() -> Generator[None, None, None]:
     if not current_platform.is_xpu():
         yield
         return
