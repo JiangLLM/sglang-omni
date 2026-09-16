@@ -15,10 +15,16 @@ when it never crosses a control-plane message (relay side-channel hops only).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import torch
+    from numpy.typing import ArrayLike
 
 
-def encode_typed_tensor(value: Any, *, key: str) -> dict[str, Any]:
+def encode_typed_tensor(
+    value: ArrayLike | torch.Tensor, *, key: str
+) -> dict[str, bytes | list[int] | str]:
     """Pack a tensor as {key}_bytes/_shape/_dtype (merge into payload.data)."""
     import numpy as np
 
