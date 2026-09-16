@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from numbers import Integral
 from typing import Any
 
@@ -395,7 +395,7 @@ def _validate_prefill_graph_policy(
 
 def _validate_positive_int(
     field: str,
-    value: Any,
+    value: object,
     errors: list[str],
     *,
     required: bool = True,
@@ -415,7 +415,7 @@ def _validate_positive_int(
     return normalized
 
 
-def _normalize_positive_int(field: str, value: Any) -> int:
+def _normalize_positive_int(field: str, value: object) -> int:
     try:
         normalized = int(value)
     except (TypeError, ValueError) as exc:
@@ -426,7 +426,7 @@ def _normalize_positive_int(field: str, value: Any) -> int:
 
 
 def _normalize_cuda_graph_bs(
-    value: Iterable[Any],
+    value: object,
     errors: list[str],
     *,
     field: str,
