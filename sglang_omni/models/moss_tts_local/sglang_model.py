@@ -44,7 +44,7 @@ from sglang_omni.models.moss_tts_local.state_pool import MossTTSLocalDecodeState
 logger = logging.getLogger(__name__)
 
 
-def _as_qwen3_config(config: Any) -> Any:
+def _as_qwen3_config(config: object) -> object:
     from transformers import Qwen3Config
 
     if isinstance(config, Qwen3Config):
@@ -158,7 +158,7 @@ class MossTTSLocalSGLangModel(torch.nn.Module):
         return self._state_pool.row_for(rid)
 
     @staticmethod
-    def _cfg_get(config: Any, name: str, default: Any) -> Any:
+    def _cfg_get(config: object, name: str, default: object) -> object:
         if isinstance(config, dict):
             value = config.get(name, default)
         else:
@@ -496,7 +496,11 @@ class MossTTSLocalSGLangModel(torch.nn.Module):
         self._frame_graphs: dict[
             int,
             tuple[
-                Any, dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor
+                torch.cuda.CUDAGraph,
+                dict[str, torch.Tensor],
+                torch.Tensor,
+                torch.Tensor,
+                torch.Tensor,
             ],
         ] = {}
 
@@ -758,7 +762,9 @@ class MossTTSLocalSGLangModel(torch.nn.Module):
         weight_loader = getattr(param, "weight_loader", default_weight_loader)
         weight_loader(param, loaded_weight)
 
-    def get_embed_and_head(self) -> tuple[list[Any], list[Any]]:
+    def get_embed_and_head(
+        self,
+    ) -> tuple[list[torch.Tensor | None], list[torch.Tensor]]:
         embed_weights = [
             getattr(layer, "weight", None) for layer in self.embedding_list
         ]
