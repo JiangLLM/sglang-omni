@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 import math
 import time
+from collections.abc import Sized
 from dataclasses import dataclass
-from typing import Any, Callable
+from types import SimpleNamespace
+from typing import Any, Callable, Literal, Protocol
 
 import torch
 from sglang.srt.managers.schedule_batch import (
@@ -24,6 +26,7 @@ from sglang_omni.scheduling.sglang_backend import SGLangARRequestData
 from sglang_omni.scheduling.token_text_streaming import (
     make_token_text_stream_output_builder,
 )
+from sglang_omni.scheduling.types import RequestOutput
 
 from .configuration_fun_asr import AUDIO_PLACEHOLDER_TOKEN as _AUDIO_PAD
 from .tool_funcs.audio_lengths import fun_asr_low_frame_rate_length
@@ -38,6 +41,17 @@ _MAX_AUDIO_DURATION_MESSAGE = (
 )
 _MAX_GENERATION_TOKENS_AT_MAX_DURATION = 200
 _MIN_GENERATION_TOKENS = 16
+
+
+class _TokenizedPrompt(Protocol):
+    @property
+    def input_ids(self) -> Sized: ...
+
+
+class _PromptTokenizer(Protocol):
+    def __call__(
+        self, text: str, /, *, add_special_tokens: Literal[False]
+    ) -> _TokenizedPrompt: ...
 
 
 @dataclass
@@ -91,7 +105,6 @@ def _decode_token_ids(
 
 
 def _resolve_language(lang_raw: str | None) -> str | None:
-
     if lang_raw is None:
         return None
     lang = lang_raw.strip().lower()
@@ -105,7 +118,6 @@ def _resolve_language(lang_raw: str | None) -> str | None:
 
 
 def _build_prompt_text(language: str | None, itn: bool, hotwords: list[str]) -> str:
-
     prompt = ""
     if hotwords:
         joined = ", ".join(hotwords)
@@ -124,7 +136,6 @@ def _build_prompt_text(language: str | None, itn: bool, hotwords: list[str]) -> 
 
 
 def _prompt_template(prompt_text: str, num_audio_tokens: int) -> str:
-
     return (
         f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
         f"<|im_start|>user\n"
@@ -135,7 +146,7 @@ def _prompt_template(prompt_text: str, num_audio_tokens: int) -> str:
 
 
 def fun_asr_prompt_overhead_tokens(
-    tokenizer: Any,
+    tokenizer: _PromptTokenizer,
     *,
     language: str | None = None,
     itn: bool = True,
@@ -363,7 +374,9 @@ def make_fun_asr_stream_output_builder(
     tokenizer: Any,
     eos_token_id: int | None = None,
     min_emit_interval_s: float = 0.0,
-) -> Callable[[str, Any, Any], list[OutgoingMessage]]:
+) -> Callable[
+    [str, SGLangARRequestData, RequestOutput | SimpleNamespace], list[OutgoingMessage]
+]:
     tokenizer_eos = getattr(tokenizer, "eos_token_id", None)
     resolved_eos = (
         eos_token_id
