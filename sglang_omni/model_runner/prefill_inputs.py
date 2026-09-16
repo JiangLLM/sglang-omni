@@ -64,7 +64,7 @@ def get_omni_prefill_inputs(forward_batch: ForwardBatch) -> OmniPrefillInputs | 
     return getattr(forward_batch, _OMNI_PREFILL_INPUTS_ATTR, None)
 
 
-def clear_omni_prefill_inputs(forward_batch: ForwardBatch) -> None:
+def clear_omni_prefill_inputs(forward_batch: ForwardBatch | None) -> None:
     """Remove the private Omni payload, if present."""
     if hasattr(forward_batch, _OMNI_PREFILL_INPUTS_ATTR):
         delattr(forward_batch, _OMNI_PREFILL_INPUTS_ATTR)
