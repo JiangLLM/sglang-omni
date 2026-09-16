@@ -10,10 +10,11 @@ import os
 import re
 import tempfile
 import time
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, Literal, Protocol, TypedDict
 
 import numpy as np
 
@@ -64,6 +65,47 @@ VOICE_UPLOAD_EXTENSION_MIME_TYPES = {
 }
 
 
+class _OptionalVoiceResponse(TypedDict, total=False):
+    ref_text: str
+    speaker_description: str
+    warning: str
+
+
+class _UploadedVoiceResponse(_OptionalVoiceResponse):
+    name: str
+    consent: str
+    created_at: int
+    file_size: int
+    mime_type: str
+
+
+class _VoiceListResponse(TypedDict):
+    voices: list[str]
+    uploaded_voices: list[_UploadedVoiceResponse]
+    cache_stats: dict[str, int]
+
+
+class _SafeTensorMetadata(Protocol):
+    def metadata(self) -> dict[str, str] | None: ...
+
+
+class _SafeOpenMetadata(Protocol):
+    def __call__(
+        self, filename: str, /, *, framework: Literal["np"]
+    ) -> AbstractContextManager[_SafeTensorMetadata]: ...
+
+
+class _SaveVoiceFile(Protocol):
+    def __call__(
+        self,
+        tensor_dict: dict[str, np.ndarray[tuple[int, ...], np.dtype[np.float32]]],
+        filename: str,
+        /,
+        *,
+        metadata: dict[str, str],
+    ) -> None: ...
+
+
 @dataclass(frozen=True)
 class UploadedVoice:
     """Persisted uploaded voice metadata."""
@@ -82,8 +124,8 @@ class UploadedVoice:
     ref_text: str | None = None
     speaker_description: str | None = None
 
-    def to_response_dict(self) -> dict[str, Any]:
-        response: dict[str, Any] = {
+    def to_response_dict(self) -> _UploadedVoiceResponse:
+        response: _UploadedVoiceResponse = {
             "name": self.name,
             "consent": self.consent,
             "created_at": self.created_at,
@@ -149,7 +191,7 @@ class SpeakerSampleStore:
         self._lock = RLock()
         self._restore()
 
-    def list_response(self) -> dict[str, Any]:
+    def list_response(self) -> _VoiceListResponse:
         with self._lock:
             uploaded = sorted(self._voices.values(), key=lambda item: item.name.lower())
             voices = sorted(
@@ -184,7 +226,7 @@ class SpeakerSampleStore:
         content_type: str | None,
         ref_text: str | None = None,
         speaker_description: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> _UploadedVoiceResponse:
         normalized_name = normalize_voice_name(name)
         if normalized_name in DEFAULT_VOICE_PRESETS:
             raise bad_request("name is reserved for a preset voice", param="name")
@@ -340,7 +382,9 @@ class SpeakerSampleStore:
             self._last_upload_timestamp = timestamp
             return timestamp
 
-    def _load_samples(self, voice: UploadedVoice) -> tuple[np.ndarray, int]:
+    def _load_samples(
+        self, voice: UploadedVoice
+    ) -> tuple[np.ndarray[tuple[int, ...], np.dtype[np.float32]], int]:
         try:
             load_file = _safetensors_load_file()
             tensors = load_file(str(voice.file_path))
@@ -421,7 +465,9 @@ def _resolve_upload_mime_type(filename: str | None, content_type: str | None) ->
     return mime_type
 
 
-def _decode_reference_audio(audio_bytes: bytes) -> tuple[np.ndarray, int]:
+def _decode_reference_audio(
+    audio_bytes: bytes,
+) -> tuple[np.ndarray[tuple[int, ...], np.dtype[np.float32]], int]:
     try:
         from sglang_omni.preprocessing.audio import AudioMediaIO
 
@@ -504,7 +550,7 @@ def _replace_voice_file(temp_path: Path, path: Path) -> None:
         raise internal_error("Failed to save uploaded voice") from exc
 
 
-def _safetensors_safe_open() -> Any:
+def _safetensors_safe_open() -> _SafeOpenMetadata:
     try:
         from safetensors import safe_open
     except ImportError as exc:
@@ -520,7 +566,7 @@ def _safetensors_load_file() -> Any:
     return load_file
 
 
-def _safetensors_save_file() -> Any:
+def _safetensors_save_file() -> _SaveVoiceFile:
     try:
         from safetensors.numpy import save_file
     except ImportError as exc:
@@ -535,7 +581,7 @@ def _voice_from_metadata(metadata: dict[str, str], path: Path) -> UploadedVoice:
     name = metadata.get("name") or normalized_name
     if normalized_name is None or name is None:
         raise bad_request("voice metadata is missing name")
-    values: dict[str, Any] = dict(metadata)
+    values: dict[str, str | int] = dict(metadata)
     try:
         for key in VOICE_METADATA_INT_FIELDS:
             if key in values:
