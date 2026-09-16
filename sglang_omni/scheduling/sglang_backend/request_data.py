@@ -11,13 +11,16 @@ from sglang_omni.scheduling.types import ARRequestData
 
 if TYPE_CHECKING:
     import torch
+    from sglang.srt.managers.schedule_batch import Req
+
+    from sglang_omni.proto import StagePayload
 
 
 @dataclass
 class SGLangARRequestData(ARRequestData):
     """Per-request state for SGLang-backed AR stages."""
 
-    req: Any = None
+    req: Req | None = None
     synced: bool = False
     generation_steps: int = 0
     suppress_tokens: list[int] | None = None
@@ -25,7 +28,7 @@ class SGLangARRequestData(ARRequestData):
     top_k: int = -1
     repetition_penalty: float = 1.0
     input_embeds_are_projected: bool = False
-    stage_payload: Any = None
+    stage_payload: StagePayload | None = None
     talker_model_inputs: dict[str, Any] = field(default_factory=dict)
     pending_feedback_queue: collections.deque[torch.Tensor] | list[torch.Tensor] = (
         field(default_factory=collections.deque)
@@ -44,6 +47,6 @@ class SGLangDLLMRequestData:
     """Per-request state for SGLang-backed dLLM stages."""
 
     output_ids: list[int] = field(default_factory=list)
-    req: Any = None
-    stage_payload: Any = None
+    req: Req | None = None
+    stage_payload: StagePayload | None = None
     finish_reason: str | None = None
