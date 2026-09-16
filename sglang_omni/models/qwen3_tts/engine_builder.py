@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import importlib
 import logging
-from collections.abc import Sequence
-from typing import Any
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import torch
 from sglang.srt.runtime_context import get_model, get_schedule
@@ -23,10 +23,30 @@ from sglang_omni.scheduling.generation_batch_policy import (
     build_default_prefill_cuda_graph_bs,
 )
 
+if TYPE_CHECKING:
+    from qwen_tts import Qwen3TTSModel
+    from sglang.srt.hardware_backend.mlx.tp_worker import MlxTpModelWorker
+    from sglang.srt.server_args import ServerArgs
+
+    from sglang_omni.model_runner.model_worker import ModelWorker
+    from sglang_omni.models.qwen3_tts.model_runner import Qwen3TTSModelRunner
+    from sglang_omni.models.qwen3_tts.prompt_frontend import Qwen3TTSPromptFrontend
+    from sglang_omni.models.qwen3_tts.request_builders import Qwen3TTSSGLangRequestData
+    from sglang_omni.models.qwen3_tts.sglang_model import Qwen3TTSTalker
+    from sglang_omni.proto import StagePayload
+    from sglang_omni.scheduling.messages import OutgoingMessage
+    from sglang_omni.scheduling.omni_scheduler import OmniScheduler
+    from sglang_omni.scheduling.sglang_backend.output_processor import (
+        SGLangOutputProcessor,
+    )
+
+
+_OverrideValueT = TypeVar("_OverrideValueT")
+
 logger = logging.getLogger(__name__)
 
 
-def _is_truthy(value: Any) -> bool:
+def _is_truthy(value: object) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, int):
@@ -70,8 +90,11 @@ class Qwen3TtsEngineBuilder(TtsEngineBuilder):
         self.reference_encoder_cuda_graph_bucket_frames = tuple(
             reference_encoder_cuda_graph_bucket_frames
         )
-        self.wrapper: Any | None = None
-        self._stream_output_builder: Any | None = None
+        self.wrapper: Qwen3TTSModel | None = None
+        self._stream_output_builder: (
+            Callable[[str, Qwen3TTSSGLangRequestData, object], list[OutgoingMessage]]
+            | None
+        ) = None
         # note (luojiaxuan): the factory assigns this before generation_defaults
         # runs, but Qwen3TTSPipelineConfig.generation_admission_defaults builds a
         # bare builder just to read the admission keys, so it needs a value.
@@ -125,11 +148,11 @@ class Qwen3TtsEngineBuilder(TtsEngineBuilder):
     def before_memory_pool(
         self,
         *,
-        model_worker: Any,
+        model_worker: ModelWorker | MlxTpModelWorker,
         checkpoint_dir: str,
         device: str,
         gpu_id: int,
-        server_args: Any,
+        server_args: ServerArgs,
     ) -> None:
         del gpu_id
         from qwen_tts import Qwen3TTSModel
@@ -183,21 +206,23 @@ class Qwen3TtsEngineBuilder(TtsEngineBuilder):
     def setup_model(
         self,
         *,
-        model_worker: Any,
+        model_worker: object,
         checkpoint_dir: str,
         device: str,
         gpu_id: int,
-        server_args: Any,
+        server_args: object,
     ) -> None:
         # note(ratish): everything Qwen3-TTS attaches stays resident, so it all
         # runs in before_memory_pool and nothing is left for after the pool.
         del model_worker, checkpoint_dir, device, gpu_id, server_args
 
-    def adjust_overrides(self, overrides: dict[str, Any]) -> None:
+    def adjust_overrides(self, overrides: dict[str, _OverrideValueT]) -> None:
         if _is_truthy(overrides.get("enable_torch_compile", False)):
             raise ValueError("Qwen3-TTS torch.compile is not supported")
 
-    def post_scheduler_setup(self, scheduler: Any, model_runner: Any) -> None:
+    def post_scheduler_setup(
+        self, scheduler: OmniScheduler, model_runner: object
+    ) -> None:
         del model_runner
         schedule = get_schedule()
         running = int(schedule.max_running_requests)
@@ -215,14 +240,23 @@ class Qwen3TtsEngineBuilder(TtsEngineBuilder):
             float(schedule.mem_fraction_static),
         )
 
-    def make_model_runner(self, model_worker: Any, output_proc: Any) -> Any:
+    def make_model_runner(
+        self,
+        model_worker: ModelWorker | MlxTpModelWorker,
+        output_proc: SGLangOutputProcessor,
+    ) -> Qwen3TTSModelRunner:
         model_runner_mod = importlib.import_module(
             "sglang_omni.models.qwen3_tts.model_runner"
         )
 
         return model_runner_mod.Qwen3TTSModelRunner(model_worker, output_proc)
 
-    def make_adapters(self, model: Any) -> tuple[Any, Any]:
+    def make_adapters(
+        self, model: Qwen3TTSTalker | Qwen3TTSPromptFrontend | None
+    ) -> tuple[
+        Callable[[StagePayload], Qwen3TTSSGLangRequestData],
+        Callable[[Qwen3TTSSGLangRequestData], StagePayload],
+    ]:
         request_builder, result_adapter, self._stream_output_builder = (
             request_builders.make_qwen3_tts_scheduler_adapters(
                 model=model,
@@ -240,5 +274,5 @@ class Qwen3TtsEngineBuilder(TtsEngineBuilder):
             "prefill_coalesce_wait_ms": self.prefill_coalesce_wait_ms,
         }
 
-    def make_abort_callback(self) -> Any | None:
+    def make_abort_callback(self) -> Callable[[str], None]:
         return request_builders.cleanup_prepared_qwen3_tts_request
