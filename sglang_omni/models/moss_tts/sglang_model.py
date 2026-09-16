@@ -238,7 +238,7 @@ class MossTTSDelaySGLangModel(torch.nn.Module):
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self._prepare_multi_modal_inputs(input_ids)
 
-    def _prepare_multi_modal_inputs(self, input_ids: torch.LongTensor) -> torch.Tensor:
+    def _prepare_multi_modal_inputs(self, input_ids: torch.Tensor) -> torch.Tensor:
         if input_ids.dim() == 1:
             channels = int(self.config.channels)
             total_tokens = int(input_ids.shape[0])
