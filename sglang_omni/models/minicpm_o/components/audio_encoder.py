@@ -54,6 +54,20 @@ def _chunked_causal_mask(
     return frame[None, :] < visible_end[:, None]
 
 
+def _feature_lens_after_conv(input_lengths: torch.Tensor) -> torch.Tensor:
+    """Valid frame counts after the encoder's stride-2 ``conv2``."""
+    return (input_lengths - 1) // 2 + 1
+
+
+def _feature_lens_after_pooling(
+    input_lengths: torch.Tensor, pool_step: int
+) -> torch.Tensor:
+    """Valid frame counts after ``pooling``."""
+    after_cnn = _feature_lens_after_conv(input_lengths)
+    after_pool = (after_cnn - pool_step) // pool_step + 1
+    return after_pool.to(dtype=torch.int32)
+
+
 class MiniCPMWhisperEncoderAttention(nn.Module):
     """Whisper encoder self-attention with a fused qkv projection and an
     additive SDPA mask (the chunked-causal + padding mask)."""
@@ -249,11 +263,6 @@ class MiniCPMOAudioEncoder(nn.Module):
         self.chunk_num_frame = int(float(config.audio_chunk_length) * 50)
         self._chunk_mask_cache: tuple[int, torch.Tensor] | None = None
 
-    def _feature_lens_after_pooling(self, input_lengths: torch.Tensor) -> torch.Tensor:
-        after_cnn = (input_lengths - 1) // 2 + 1
-        after_pool = (after_cnn - self.audio_pool_step) // self.audio_pool_step + 1
-        return after_pool.to(dtype=torch.int32)
-
     def _cached_chunk_mask(self, size: int) -> torch.Tensor:
         if self._chunk_mask_cache is None or self._chunk_mask_cache[0] != size:
             self._chunk_mask_cache = (
@@ -293,8 +302,12 @@ class MiniCPMOAudioEncoder(nn.Module):
         _, _, max_mel_seq_len = wavforms.shape
         max_seq_len = (max_mel_seq_len - 1) // 2 + 1
 
+        # seq_range indexes the post-conv sequence, so the validity bound must
+        # be the post-conv length too -- comparing against raw mel lengths lets
+        # padding frames act as valid attention keys.
         seq_range = torch.arange(max_seq_len, device=self._device)
-        valid = seq_range[None, :] < lens[:, None]  # (B, T) key validity
+        lens_after_conv = _feature_lens_after_conv(lens)
+        valid = seq_range[None, :] < lens_after_conv[:, None]  # (B, T) key validity
         allowed = self._cached_chunk_mask(max_seq_len)[None, :, :] & valid[:, None, :]
         attn_mask = torch.where(allowed, 0.0, _MASK_MIN).to(self._dtype)
         attn_mask = attn_mask.unsqueeze(1)  # (B, 1, T, T)
@@ -308,7 +321,7 @@ class MiniCPMOAudioEncoder(nn.Module):
 
         # Trim each chunk to its pooled length in one masked select; lengths
         # stay host-side so no per-sample GPU→CPU sync is needed.
-        pooled_lens = self._feature_lens_after_pooling(lens_cpu)
+        pooled_lens = _feature_lens_after_pooling(lens_cpu, self.audio_pool_step)
         pool_range = torch.arange(audio_embeds.shape[1], device=self._device)
         keep = pool_range[None, :] < pooled_lens.to(self._device)[:, None]
         return {"audio_embeds": audio_embeds[keep]}

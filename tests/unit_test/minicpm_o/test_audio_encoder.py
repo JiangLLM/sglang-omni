@@ -18,10 +18,12 @@ import torch
 from transformers import PretrainedConfig
 
 from sglang_omni.models.minicpm_o.components.audio_encoder import (
+    MiniCPMOAudioEncoder,
     MiniCPMWhisperEncoder,
     MultiModalProjector,
     _audio_config_object,
     _chunked_causal_mask,
+    _feature_lens_after_pooling,
     _fuse_qkv,
 )
 
@@ -159,6 +161,66 @@ def test_golden_parity_vs_remote_code(lens: list[int]) -> None:
         torch.testing.assert_close(
             got[i, :valid_frames], golden[i, :valid_frames], rtol=1e-4, atol=1e-4
         )
+
+
+def _tiny_audio_encoder(pool_step: int = 2) -> MiniCPMOAudioEncoder:
+    """A ``MiniCPMOAudioEncoder`` with random weights and no checkpoint I/O."""
+    torch.manual_seed(0)
+    config = _small_whisper_config()
+    encoder = object.__new__(MiniCPMOAudioEncoder)
+    torch.nn.Module.__init__(encoder)
+    encoder._device = torch.device("cpu")
+    encoder._dtype = torch.float32
+    encoder.apm = MiniCPMWhisperEncoder(config)
+    encoder.audio_projection_layer = MultiModalProjector(
+        in_dim=config.d_model, out_dim=16
+    )
+    encoder.audio_pool_step = pool_step
+    encoder.audio_avg_pooler = torch.nn.AvgPool1d(pool_step, stride=pool_step)
+    encoder.chunk_num_frame = 50
+    encoder._chunk_mask_cache = None
+    return encoder
+
+
+def test_padding_content_does_not_change_valid_output() -> None:
+    """A short row's embeddings must not depend on the batch's padding.
+
+    Encode the same short mel twice in batches of equal shape that differ only
+    in the padding content of the short row. ``seq_range`` indexes the
+    post-conv sequence, so a validity bound taken from the raw mel lengths
+    admits padding frames as attention keys and the two runs disagree.
+    """
+    encoder = _tiny_audio_encoder()
+    short_len, long_len = 137, 3000
+
+    torch.manual_seed(1)
+    short_mel = torch.randn(80, short_len)
+    long_mel = torch.randn(80, long_len)
+
+    padded_mel = torch.zeros(2, 80, long_len)
+    padded_mel[0, :, :long_len] = long_mel
+    padded_mel[1, :, :short_len] = short_mel
+    lens = torch.tensor([long_len, short_len])
+
+    with torch.no_grad():
+        clean = encoder(audio_features=padded_mel, audio_feature_lens=lens)
+
+        torch.manual_seed(2)
+        polluted_mel = padded_mel.clone()
+        polluted_mel[1, :, short_len:] = torch.randn(80, long_len - short_len)
+        polluted = encoder(audio_features=polluted_mel, audio_feature_lens=lens)
+
+    pooled_short = int(
+        _feature_lens_after_pooling(torch.tensor([short_len]), encoder.audio_pool_step)
+    )
+    # Rows are emitted in chunk order with each chunk trimmed to its pooled
+    # length, so the short row sits at the end of the flattened output.
+    torch.testing.assert_close(
+        polluted["audio_embeds"][-pooled_short:],
+        clean["audio_embeds"][-pooled_short:],
+        rtol=0,
+        atol=0,
+    )
 
 
 def test_projector_shapes() -> None:

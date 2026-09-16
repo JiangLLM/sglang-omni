@@ -77,10 +77,17 @@ def _init_sglang_tp() -> None:
 
     from sglang.srt.server_args import ServerArgs, set_global_server_args_for_scheduler
 
+    from sglang_omni.vendor.sglang import get_global_server_args
+
+    # Publish process-global server args only when this process has none. A
+    # failure to publish is real and must surface rather than be swallowed as
+    # "already set".
     try:
-        set_global_server_args_for_scheduler(ServerArgs(model_path="dummy"))
+        already_set = get_global_server_args() is not None
     except Exception:
-        pass  # Already set
+        already_set = False
+    if not already_set:
+        set_global_server_args_for_scheduler(ServerArgs(model_path="dummy"))
 
     if not parallel_state.model_parallel_is_initialized():
         parallel_state.init_distributed_environment(

@@ -94,15 +94,16 @@ def create_image_encoder_executor(
     model_path: str,
     *,
     device: str | None = None,
+    gpu_id: int | None = None,
     dtype: str | None = None,
 ):
     from sglang_omni.models.minicpm_o.components.image_encoder import (
         MiniCPMOImageEncoder,
     )
-    from sglang_omni.utils.device import resolve_device_spec
+    from sglang_omni.utils.device import resolve_concrete_device
 
     model = MiniCPMOImageEncoder(
-        model_path, device=resolve_device_spec(device), dtype=dtype
+        model_path, device=str(resolve_concrete_device(device, gpu_id)), dtype=dtype
     )
     return _create_encoder_executor(model, stage_name="image_encoder")
 
@@ -111,15 +112,16 @@ def create_audio_encoder_executor(
     model_path: str,
     *,
     device: str | None = None,
+    gpu_id: int | None = None,
     dtype: str | None = None,
 ):
     from sglang_omni.models.minicpm_o.components.audio_encoder import (
         MiniCPMOAudioEncoder,
     )
-    from sglang_omni.utils.device import resolve_device_spec
+    from sglang_omni.utils.device import resolve_concrete_device
 
     model = MiniCPMOAudioEncoder(
-        model_path, device=resolve_device_spec(device), dtype=dtype
+        model_path, device=str(resolve_concrete_device(device, gpu_id)), dtype=dtype
     )
     return _create_encoder_executor(model, stage_name="audio_encoder")
 
@@ -193,6 +195,7 @@ def create_code2wav_executor(
     model_path: str,
     *,
     device: str | None = None,
+    gpu_id: int | None = None,
     float16: bool = False,
 ):
     from sglang_omni.models.minicpm_o.components.code2wav import MiniCPMOCode2Wav
@@ -203,10 +206,12 @@ def create_code2wav_executor(
     )
     from sglang_omni.scheduling.simple_scheduler import SimpleScheduler
     from sglang_omni.utils.audio_payload import audio_waveform_payload
-    from sglang_omni.utils.device import resolve_device_spec
+    from sglang_omni.utils.device import resolve_concrete_device
 
     model = MiniCPMOCode2Wav(
-        model_path, device=resolve_device_spec(device), float16=float16
+        model_path,
+        device=str(resolve_concrete_device(device, gpu_id)),
+        float16=float16,
     )
 
     def _vocode(payload: StagePayload) -> StagePayload:

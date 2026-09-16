@@ -34,3 +34,24 @@ def test_speech_pipeline_preserves_tp_and_process_boundaries() -> None:
     assert _stage(config, "thinker").process == "pipeline"
     assert _stage(config, "talker").process == "talker"
     assert _stage(config, "code2wav").process == "code2wav"
+
+
+def test_gpu_placed_factories_declare_gpu_id() -> None:
+    """Every GPU-placed stage factory must accept ``gpu_id``.
+
+    ``config/runtime.py`` raises before it ever calls a factory that is placed
+    on a GPU without a ``gpu_id`` parameter, so a missing one takes the server
+    down at startup rather than degrading placement.
+    """
+    import inspect
+
+    from sglang_omni.models.minicpm_o import stages
+
+    factories = [
+        stages.create_image_encoder_executor,
+        stages.create_audio_encoder_executor,
+        stages.create_code2wav_executor,
+    ]
+    for factory in factories:
+        params = inspect.signature(factory).parameters
+        assert "gpu_id" in params, f"{factory.__qualname__} is missing gpu_id"
