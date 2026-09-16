@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from sglang.srt.arg_groups.model_override_base import resolved_view
 
 from sglang_omni.models.ming_omni.pipeline.sampling import build_ming_sampling_params
 from sglang_omni.vendor.sglang.server_args import override_server_args
+
+if TYPE_CHECKING:
+    import torch
+    from sglang.srt.server_args import ServerArgs
+
+    from sglang_omni.scheduling.omni_scheduler import OmniScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +22,7 @@ StreamOutputBuilder = Callable[[str, Any, Any], list[Any]]
 
 
 def create_thinker_scheduler(
-    server_args: Any,
+    server_args: ServerArgs,
     *,
     model_path: str,
     gpu_id: int = 0,
@@ -24,7 +30,7 @@ def create_thinker_scheduler(
     tp_size: int = 1,
     nccl_port: int | None = None,
     enable_streaming_tts: bool = False,
-):
+) -> OmniScheduler:
     if tp_size < 1:
         raise ValueError(f"tp_size must be >= 1, got {tp_size}")
     if resolved_view(server_args).tp_size != tp_size:
@@ -428,18 +434,18 @@ def make_thinker_stream_output_builder(
     return _build_stream_output
 
 
-def _torch_long():
+def _torch_long() -> torch.dtype:
     import torch
 
     return torch.long
 
 
-def _collect_eos_token_ids(tokenizer: Any) -> set[int] | None:
+def _collect_eos_token_ids(tokenizer: object) -> set[int] | None:
     """Match Ming V0: let the SGLang request stop only on tokenizer EOS."""
     eid = getattr(tokenizer, "eos_token_id", None)
     return {int(eid)} if isinstance(eid, int) and eid >= 0 else None
 
 
-def _stop_hits(output_ids: list[int], tokenizer: Any) -> list[int]:
+def _stop_hits(output_ids: list[int], tokenizer: object) -> list[int]:
     stop_ids = _collect_eos_token_ids(tokenizer) or set()
     return [int(token_id) for token_id in output_ids[-8:] if int(token_id) in stop_ids]
