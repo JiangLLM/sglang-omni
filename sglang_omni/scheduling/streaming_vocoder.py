@@ -52,10 +52,13 @@ _COMPLETED_STREAM_REQUEST_ID_RETAINED = 5000
 
 StreamStateT = TypeVar("StreamStateT")
 StepPlanT = TypeVar("StepPlanT")
+_ComputeInputT = TypeVar("_ComputeInputT")
+_ComputeResultT = TypeVar("_ComputeResultT")
+_RequestCostInputT = TypeVar("_RequestCostInputT")
 
 
 def resolve_initial_codec_chunk_frames(
-    params: Mapping[str, Any] | None,
+    params: Mapping[str, object] | None,
     *,
     steady_chunk_frames: int,
     default_frames: int = 0,
@@ -103,7 +106,7 @@ class StreamingVocoderBase(
 
     def __init__(
         self,
-        compute_fn: Callable[[Any], Any] | None,
+        compute_fn: Callable[[_ComputeInputT], _ComputeResultT] | None,
         *,
         sample_rate: int,
         stream_source_hint: str | None = None,
@@ -111,7 +114,7 @@ class StreamingVocoderBase(
         batch_compute_fn: Callable[[list[Any]], list[Any]] | None = None,
         max_batch_size: int = 1,
         max_batch_wait_ms: int = 0,
-        request_cost_fn: Callable[[Any], int] | None = None,
+        request_cost_fn: Callable[[_RequestCostInputT], int] | None = None,
         max_batch_cost: int | None = None,
         abort_callback: Callable[[str], None] | None = None,
     ) -> None:
@@ -215,7 +218,7 @@ class StreamingVocoderBase(
         for request_id in failed:
             self.cleanup_aborted_request(request_id)
 
-    def handle_stream_chunk(self, request_id: str, item: Any) -> None:
+    def handle_stream_chunk(self, request_id: str, item: object) -> None:
         """Coalescing schedulers route single-chunk deliveries through the
         batch backbone, so the deferred abort cleanup stays off ``state_lock``
         (the inherited path would run ``on_stream_chunk`` with the lock held)."""
@@ -405,7 +408,7 @@ class StreamingVocoderBase(
         self,
         request_id: str,
         state: StreamStateT,
-        source: StagePayload | Mapping[str, Any],
+        source: StagePayload | Mapping[str, object],
         *,
         origin: str,
     ) -> None:
