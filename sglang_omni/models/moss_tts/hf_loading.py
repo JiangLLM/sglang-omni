@@ -6,7 +6,7 @@ from __future__ import annotations
 import copy
 import json
 import math
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from numbers import Integral, Real
 from typing import Any
@@ -21,7 +21,7 @@ from sglang.srt.utils.hf_transformers import (
 MOSS_TTS_DEFAULT_CONTEXT_LENGTH = 8192
 
 
-def _validate_context_length_metadata(text_config: Any) -> bool:
+def _validate_context_length_metadata(text_config: object) -> bool:
     context_value = None
     for key in CONTEXT_LENGTH_KEYS:
         value = getattr(text_config, key, None)
@@ -128,15 +128,15 @@ def resolve_moss_tts_context_length(
 
 
 @contextmanager
-def moss_transformers_processor_compat() -> Iterator[None]:
+def moss_transformers_processor_compat() -> Generator[None, None, None]:
     """Scope Transformers API-drift patches to MOSS processor/code loading."""
     import transformers.configuration_utils as configuration_utils
     from transformers import PreTrainedModel, processing_utils
 
     missing = object()
-    undo: list[tuple[str, Any, str, Any]] = []
+    undo: list[tuple[str, Any, str, object]] = []
 
-    def patch_attr(obj: Any, name: str, value: Any) -> None:
+    def patch_attr(obj: object, name: str, value: object) -> None:
         undo.append(("attr", obj, name, getattr(obj, name, missing)))
         setattr(obj, name, value)
 

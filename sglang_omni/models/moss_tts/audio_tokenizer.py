@@ -45,6 +45,7 @@ from sglang_omni.models.weight_loader import (
     load_weights_by_prefix,
     resolve_model_path,
 )
+from sglang_omni.utils.json import JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -1683,7 +1684,7 @@ def _normalize_moss_audio_tokenizer_v1_transformer_state_dict(
     return normalized
 
 
-def _load_moss_audio_config(model_path: str) -> tuple[Path, dict[str, Any]]:
+def _load_moss_audio_config(model_path: str) -> tuple[Path, dict[str, JsonValue]]:
     resolved_path = resolve_model_path(str(model_path))
     config_path = resolved_path / "config.json"
     with config_path.open(encoding="utf-8") as config_file:
