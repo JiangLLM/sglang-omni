@@ -15,9 +15,10 @@ import logging
 import os
 import queue as _queue_mod
 import threading
+from collections.abc import Iterable
 from contextlib import suppress
 from dataclasses import replace
-from typing import Any, Awaitable, Callable, Literal
+from typing import Any, Awaitable, Callable, Literal, TypeVar
 
 import torch
 
@@ -26,11 +27,16 @@ from sglang_omni.comm.data_ref import DataKind, DataRef
 from sglang_omni.comm.engine import CommEngine, KVTransferCancelled, KVTransferRejected
 from sglang_omni.comm.kv_transfer import KVPageTransfer
 from sglang_omni.comm.router import CommRouter
+from sglang_omni.pipeline.control_plane import StageControlPlane
 from sglang_omni.pipeline.local_dispatch import LocalStageDispatcher
 from sglang_omni.pipeline.replicas import ReplicaTopology
 from sglang_omni.pipeline.stage.input import DirectInput, InputHandler
 from sglang_omni.pipeline.stage.stream_queue import StreamItem, StreamQueue
-from sglang_omni.pipeline.tp_control import TPLeaderFanout, TPWorkMessage
+from sglang_omni.pipeline.tp_control import (
+    TPFollowerControlPlane,
+    TPLeaderFanout,
+    TPWorkMessage,
+)
 from sglang_omni.platforms import current_platform
 from sglang_omni.profiler.comm_trace import emit as _comm_trace
 from sglang_omni.profiler.event_recorder import emit as _emit_event
@@ -61,6 +67,10 @@ logger = logging.getLogger(__name__)
 
 _SCHEDULER_THREAD_JOIN_TIMEOUT_S = 5.0
 _OUTBOX_DRAIN_BATCH_SIZE = 64
+
+_CommConfigValueT = TypeVar("_CommConfigValueT")
+_AdminDataValueT = TypeVar("_AdminDataValueT")
+_TaskResultT = TypeVar("_TaskResultT")
 
 GetNextFn = Callable[[str, Any], str | list[str] | None]
 GetStreamDoneTargetsFn = Callable[[str, Any], str | list[str] | None]
@@ -94,14 +104,14 @@ class Stage:
         get_next: GetNextFn,
         gpu_id: int | None,
         endpoints: dict[str, str],
-        control_plane: Any,
+        control_plane: StageControlPlane | TPFollowerControlPlane | None,
         rank_endpoints: dict[str, tuple[str, ...]] | None = None,
         tp_rank: int = 0,
         tp_size: int = 1,
         placement_gpu_id: int | None = None,
         input_handler: InputHandler | None = None,
         relay: Relay | None = None,
-        comm_config: dict[str, Any] | None = None,
+        comm_config: dict[str, _CommConfigValueT] | None = None,
         scheduler: Any = None,
         project_payload: dict[str, Callable[[Any], Any]] | None = None,
         stream_targets: list[str] | None = None,
@@ -168,7 +178,7 @@ class Stage:
         self._first_stream_chunk_seen: set[str] = set()
         self._local_stream_targets: dict[str, set[str]] = {}
         self._nonlocal_stream_targets: dict[str, set[str]] = {}
-        self._receive_tasks: set[asyncio.Task] = set()
+        self._receive_tasks: set[asyncio.Task[None]] = set()
         self._receive_lane_tails: dict[tuple[str, str], asyncio.Future[None]] = {}
         self._scheduler_thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -219,7 +229,7 @@ class Stage:
         # Start scheduler in dedicated thread
         if self.scheduler is not None:
 
-            def _run_scheduler():
+            def _run_scheduler() -> None:
                 # Active-stage binding so ``emit(stage=None)`` from
                 # scheduler-thread descendants resolves to this stage.
                 _set_active_stage(self.name)
@@ -418,7 +428,7 @@ class Stage:
 
         lane = (msg.request_id, msg.from_stage)
         predecessor = self._receive_lane_tails.get(lane)
-        completion = asyncio.get_running_loop().create_future()
+        completion: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         self._receive_lane_tails[lane] = completion
         task = asyncio.create_task(
             self._run_receive_task(
@@ -1058,7 +1068,7 @@ class Stage:
             )
 
     def _admin_result_from_outcome(
-        self, operation: AdminOperation, outcome: Any
+        self, operation: AdminOperation, outcome: object
     ) -> AdminResult:
         if isinstance(outcome, AdminResult):
             return outcome
@@ -1087,7 +1097,7 @@ class Stage:
         *,
         success: bool,
         message: str = "",
-        data: dict[str, Any] | None = None,
+        data: dict[str, _AdminDataValueT] | None = None,
         error: str | None = None,
     ) -> AdminResult:
         return AdminResult(
@@ -1205,12 +1215,12 @@ class Stage:
     def _launch_kv_transfer(self, transfer: KVPageTransfer) -> None:
         started = False
 
-        async def send():
+        async def send() -> None:
             nonlocal started
             started = True
             await self._send_kv_transfer(transfer)
 
-        def done(task):
+        def done(task: asyncio.Task[None]) -> None:
             if not started:
                 self._discard_kv_transfer(transfer)
             self._receive_tasks.discard(task)
@@ -1273,7 +1283,7 @@ class Stage:
             self._clear_request_state(transfer.request_id)
 
     @staticmethod
-    def _discard_kv_transfer(transfer: Any) -> None:
+    def _discard_kv_transfer(transfer: object) -> None:
         if isinstance(transfer, KVPageTransfer) and transfer.lease is not None:
             transfer.lease.release()
 
@@ -1460,8 +1470,8 @@ class Stage:
 
     @staticmethod
     def _is_isolated_projected_payload(
-        original_payload: Any,
-        projected_payload: Any,
+        original_payload: object,
+        projected_payload: object,
         *,
         projector_present: bool,
     ) -> bool:
@@ -1484,7 +1494,7 @@ class Stage:
         )
 
     @staticmethod
-    def _shares_mutable_container(original: Any, projected: Any) -> bool:
+    def _shares_mutable_container(original: object, projected: object) -> bool:
         original_ids = Stage._collect_mutable_container_ids(original)
         if not original_ids:
             return False
@@ -1492,7 +1502,7 @@ class Stage:
 
     @staticmethod
     def _collect_mutable_container_ids(
-        obj: Any, seen: set[int] | None = None
+        obj: object, seen: set[int] | None = None
     ) -> set[int]:
         seen = set() if seen is None else seen
         obj_id = id(obj)
@@ -1510,7 +1520,7 @@ class Stage:
 
     @staticmethod
     def _contains_mutable_container_id(
-        obj: Any, original_ids: set[int], seen: set[int] | None = None
+        obj: object, original_ids: set[int], seen: set[int] | None = None
     ) -> bool:
         seen = set() if seen is None else seen
         obj_id = id(obj)
@@ -1526,7 +1536,7 @@ class Stage:
         )
 
     @staticmethod
-    def _iter_container_children(obj: Any):
+    def _iter_container_children(obj: object) -> Iterable[object]:
         if isinstance(obj, dict):
             return obj.values()
         if isinstance(obj, (list, tuple, set, frozenset)):
@@ -1931,7 +1941,9 @@ class Stage:
         ):
             recorder.stop(run_id=msg.run_id)
 
-    def _on_background_task_done(self, task: asyncio.Task, label: str) -> None:
+    def _on_background_task_done(
+        self, task: asyncio.Task[_TaskResultT], label: str
+    ) -> None:
         if task.cancelled():
             return
         exc = task.exception()
