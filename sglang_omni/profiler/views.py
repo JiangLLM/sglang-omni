@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, TypeVar
 
+from sglang_omni.utils.json import JsonValue
+
 logger = logging.getLogger(__name__)
 
 _TableRowT = TypeVar("_TableRowT", bound=Mapping[str, object])
@@ -25,7 +27,7 @@ _TableRowT = TypeVar("_TableRowT", bound=Mapping[str, object])
 # ---------------------------------------------------------------------------
 
 
-def iter_events(source: str | Path | Iterable[str | Path]) -> Iterator[dict[str, Any]]:
+def iter_events(source: str | Path | Iterable[str | Path]) -> Iterator[JsonValue]:
     """Yield every JSON event from a file, directory, or list of either."""
     paths: list[Path] = []
     if isinstance(source, (str, Path)):
@@ -56,7 +58,9 @@ def iter_events(source: str | Path | Iterable[str | Path]) -> Iterator[dict[str,
                     )
 
 
-def load_events(source: str | Path | Iterable[str | Path]) -> list[dict[str, Any]]:
+def load_events(
+    source: str | Path | Iterable[str | Path],
+) -> list[dict[str, JsonValue]]:
     """Return all events sorted by ``timestamp_ns`` (stable)."""
     events = list(iter_events(source))
     events.sort(key=lambda e: e.get("timestamp_ns", 0))
