@@ -13,9 +13,11 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable, Iterator, Mapping, TypeVar
 
 logger = logging.getLogger(__name__)
+
+_TableRowT = TypeVar("_TableRowT", bound=Mapping[str, object])
 
 
 # ---------------------------------------------------------------------------
@@ -401,7 +403,7 @@ def build_report(source: str | Path | Iterable[str | Path]) -> dict[str, Any]:
     }
 
 
-def format_table(rows: list[dict[str, Any]], columns: list[str]) -> str:
+def format_table(rows: list[_TableRowT], columns: list[str]) -> str:
     """Pretty-print a list of dicts as a fixed-width table."""
     if not rows:
         return "(empty)\n"
