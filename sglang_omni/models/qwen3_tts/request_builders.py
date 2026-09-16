@@ -474,7 +474,7 @@ def normalize_qwen3_tts_inputs(inputs: object) -> tuple[str, list[dict[str, Any]
 
 def resolve_voice_clone_reference(
     references: list[dict[str, Any]],
-    tts_params: dict[str, Any],
+    tts_params: dict[str, _TTSParamValueT],
 ) -> tuple[Any, str | None]:
     reference = references[0] if references else {}
     ref_audio = (
@@ -815,7 +815,7 @@ def _qwen3_tts_voice_prompt_from_cache(
 
 @dataclass(frozen=True)
 class _Qwen3TTSAdhocReferenceInput:
-    ref_audio: Any
+    ref_audio: object
     ref_text: str | None
     x_vector_only_mode: bool
 
