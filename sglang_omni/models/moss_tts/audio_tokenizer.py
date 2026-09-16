@@ -11,12 +11,13 @@ from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, TypeVar
+from typing import Any, TypedDict, TypeVar
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrize import is_parametrized, remove_parametrizations
+from typing_extensions import Unpack
 
 from sglang_omni.models.moss_tts.attention import (
     AUTO_ATTENTION_BACKEND,
@@ -28,6 +29,7 @@ from sglang_omni.models.moss_tts.attention import (
     MossPackedRopeCache,
     PositionIdsCache,
     StreamingExecutionContext,
+    _LocalCausalFlashPlan,
     merge_attention_backend_resolutions,
     pack_padded_sequence,
     pack_padded_sequence_from_host_lengths,
@@ -138,6 +140,16 @@ def _feed_forward(module: nn.Module) -> nn.Module:
         module.linear2,
         module.activation,
     )
+
+
+class _AttentionKwargs(TypedDict, total=False):
+    cu_seqlens: torch.Tensor | None
+    max_seqlen: int | None
+    position_ids: torch.Tensor | None
+    local_flash_plan: _LocalCausalFlashPlan | None
+
+    input_lengths: torch.Tensor | None
+    execution_context: StreamingExecutionContext | None
 
 
 class MossAudioTokenizerTransformerLayer(nn.Module):
@@ -305,7 +317,9 @@ class MossAudioTokenizerTransformerLayer(nn.Module):
             packed_rope_cache=packed_rope_cache,
         )
 
-    def forward(self, x: torch.Tensor, **kwargs: Any) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, **kwargs: Unpack[_AttentionKwargs]
+    ) -> torch.Tensor:
         residual = x
         x = self.norm1(x)
         x = residual.to(x) + self.layer_scale_1(self.self_attn(x, **kwargs))
