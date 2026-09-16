@@ -293,7 +293,7 @@ def _load_audio_tokenizer(checkpoint_dir: str, audio_config: dict, device: str):
     return tokenizer
 
 
-class _VoxtralTTSVocoder(BatchVocoderBase):
+class _VoxtralTTSVocoder(BatchVocoderBase[VoxtralTTSState, torch.Tensor, torch.Tensor]):
     """Decode audio codes with repeated initial frames as warmup context."""
 
     _N_WARMUP = 2

@@ -14,11 +14,14 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 import torch
 import torch.nn.functional as F
+from numpy.typing import ArrayLike, NDArray
 from torch.nn.utils.parametrize import is_parametrized, remove_parametrizations
 
 if TYPE_CHECKING:
     from cosyvoice.flow.flow import CausalMaskedDiffWithDiT
     from cosyvoice.flow.flow_matching import ConditionalCFM
+
+    from sglang_omni.models.fun_cosyvoice3.mlx.vocoder import FunCosyVoice3MlxVocoder
 
 from sglang_omni.models.fun_cosyvoice3.config import reject_conflicting_dit_accelerators
 from sglang_omni.models.fun_cosyvoice3.flow_estimator_trt import (
@@ -1084,7 +1087,7 @@ def load_cosyvoice3_mlx_vocoder(
     *,
     revision: str | None,
     expected_dtype: str | None,
-) -> Any:
+) -> FunCosyVoice3MlxVocoder:
     model_dir = resolve_cosyvoice3_mlx_artifact(model_path, revision=revision)
     from sglang_omni.models.fun_cosyvoice3.mlx.vocoder import FunCosyVoice3MlxVocoder
 
@@ -1331,7 +1334,9 @@ def adaptive_flow_requests_grouping(
     raise AssertionError("valid Flow requests must have a feasible partition")
 
 
-class CosyVoice3Vocoder(BatchVocoderBase):
+class CosyVoice3Vocoder(
+    BatchVocoderBase[FunCosyVoice3State, torch.Tensor, torch.Tensor]
+):
     def __init__(
         self,
         flow: FunCosyVoice3Flow | CausalMaskedDiffWithDiT,
@@ -1383,7 +1388,7 @@ class CosyVoice3Vocoder(BatchVocoderBase):
 
     async def decode_batch(
         self, items: list[tuple[FunCosyVoice3State, torch.Tensor]]
-    ) -> list[tuple[Any, int]]:
+    ) -> list[tuple[torch.Tensor, int]]:
         prepared: list[PreparedFlowRequest] = []
         for index, (state, codes) in enumerate(items):
             flow_input = self.make_flow_input(state, codes)
@@ -1399,7 +1404,7 @@ class CosyVoice3Vocoder(BatchVocoderBase):
                 )
             )
 
-        results: list[tuple[Any, int] | None] = [None] * len(items)
+        results: list[tuple[torch.Tensor, int] | None] = [None] * len(items)
         flow_groups = adaptive_flow_requests_grouping(
             prepared,
             flow_merge_max_gap_frames=self.flow_merge_max_gap_frames,
@@ -1419,11 +1424,11 @@ class CosyVoice3Vocoder(BatchVocoderBase):
                 zip(flow_group, mel_list, strict=True),
                 key=lambda pair: int(pair[1].shape[-1]),
             )
-            group: list[tuple[Any, torch.Tensor]] = []
+            group: list[tuple[PreparedFlowRequest, torch.Tensor]] = []
             total = 0
             longest = 0
             max_waste = self.hift_max_padding_waste
-            hift_groups: list[list[tuple[Any, torch.Tensor]]] = []
+            hift_groups: list[list[tuple[PreparedFlowRequest, torch.Tensor]]] = []
             for pair in ordered:
                 length = int(pair[1].shape[-1])
                 candidate_longest = max(longest, length)
@@ -1448,7 +1453,7 @@ class CosyVoice3Vocoder(BatchVocoderBase):
 
         if any(result is None for result in results):
             raise RuntimeError("Fun-CosyVoice3 vocoder did not decode every request")
-        return [cast(tuple[Any, int], result) for result in results]
+        return [cast(tuple[torch.Tensor, int], result) for result in results]
 
     async def decode_payload(self, payload: StagePayload) -> StagePayload:
         results = await self.decode_payloads([payload])
@@ -1664,7 +1669,7 @@ class CosyVoice3Vocoder(BatchVocoderBase):
         self,
         payload: StagePayload,
         state: FunCosyVoice3State,
-        wav: Any,
+        wav: ArrayLike | torch.Tensor,
         sample_rate: int,
     ) -> StagePayload:
         if wav is None:
@@ -1684,10 +1689,12 @@ class CosyVoice3Vocoder(BatchVocoderBase):
         return payload
 
 
-class CosyVoice3MlxVocoderAdapter(BatchVocoderBase):
+class CosyVoice3MlxVocoderAdapter(
+    BatchVocoderBase[FunCosyVoice3State, torch.Tensor, NDArray[np.float32]]
+):
     """Bridge pipeline state into the native batch-one MLX Flow/HiFT API."""
 
-    def __init__(self, vocoder: Any) -> None:
+    def __init__(self, vocoder: FunCosyVoice3MlxVocoder) -> None:
         self.vocoder = vocoder
         self.mx = get_mlx_core()
         self.stream = self.mx.new_thread_local_stream(self.mx.gpu)
@@ -1705,7 +1712,7 @@ class CosyVoice3MlxVocoderAdapter(BatchVocoderBase):
 
     async def decode_batch(
         self, items: list[tuple[FunCosyVoice3State, torch.Tensor]]
-    ) -> list[tuple[Any, int]]:
+    ) -> list[tuple[NDArray[np.float32], int]]:
         if len(items) != 1:
             raise RuntimeError(
                 "Fun-CosyVoice3 native MLX vocoder requires exactly one request per decode batch"
@@ -1789,7 +1796,7 @@ class CosyVoice3MlxVocoderAdapter(BatchVocoderBase):
         self,
         payload: StagePayload,
         state: FunCosyVoice3State,
-        wav: Any,
+        wav: ArrayLike | torch.Tensor,
         sample_rate: int,
     ) -> StagePayload:
         if wav is None:

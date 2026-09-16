@@ -22,7 +22,7 @@ _LENGTH_BUCKET_FRAMES = 32
 logger = logging.getLogger(__name__)
 
 
-class DotsTTSBatchVocoder(BatchVocoderBase):
+class DotsTTSBatchVocoder(BatchVocoderBase[DotsTTSState, torch.Tensor, torch.Tensor]):
     def __init__(self, codec: DotsAudioCodec) -> None:
         self.codec = codec
         self._logged_batch = False
