@@ -479,7 +479,7 @@ class Client:
         return OmniRequest(inputs=inputs, params=params, metadata=metadata)
 
     @staticmethod
-    def _default_result_builder(request_id: str, result: Any) -> GenerateChunk:
+    def _default_result_builder(request_id: str, result: object) -> GenerateChunk:
         chunk = GenerateChunk(request_id=request_id, finish_reason="stop")
         if isinstance(result, GenerateChunk):
             result.request_id = request_id
