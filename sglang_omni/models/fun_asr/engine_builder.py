@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from sglang.srt.managers.mm_utils import init_mm_embedding_cache
 from transformers import AutoFeatureExtractor, AutoTokenizer
@@ -23,6 +24,14 @@ from sglang_omni.scheduling.generation_batch_policy import (
     build_default_prefill_cuda_graph_bs,
 )
 from sglang_omni.utils.gpu_compat import get_visible_gpu_sm_version
+
+if TYPE_CHECKING:
+    from sglang.srt.server_args import ServerArgs
+
+    from sglang_omni.models.fun_asr.sglang_model import (
+        FunAsrNanoForConditionalGeneration,
+    )
+    from sglang_omni.proto import StagePayload
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +142,8 @@ class FunASREngineBuilder(AsrEngineBuilder):
 
     def setup_model_resources(
         self,
-        model: Any,
-        server_args: Any,
+        model: FunAsrNanoForConditionalGeneration | None,
+        server_args: object,
         *,
         generation_cuda_graph_enabled: bool,
     ) -> None:
@@ -172,7 +181,11 @@ class FunASREngineBuilder(AsrEngineBuilder):
             )
         init_mm_embedding_cache(self.mm_embedding_cache_size_bytes)
 
-    def setup_runtime_resources(self, model: Any, server_args: Any) -> None:
+    def setup_runtime_resources(
+        self,
+        model: FunAsrNanoForConditionalGeneration | None,
+        server_args: ServerArgs | None,
+    ) -> None:
         if not self.enable_pre_lm_encoder:
             return
         self.audio_encoder_service = FunASRPreLMEncoderService(
@@ -189,7 +202,12 @@ class FunASREngineBuilder(AsrEngineBuilder):
             max_batch_wait_ms=self.pre_lm_max_batch_wait_ms,
         )
 
-    def make_adapters(self, model: Any) -> tuple[Any, Any]:
+    def make_adapters(
+        self, model: object
+    ) -> tuple[
+        Callable[[StagePayload], request_builders.FunASRRequestData],
+        Callable[[request_builders.FunASRRequestData], StagePayload],
+    ]:
         del model
         return request_builders.make_fun_asr_scheduler_adapters(
             tokenizer=self.tokenizer,
@@ -199,7 +217,7 @@ class FunASREngineBuilder(AsrEngineBuilder):
             audio_encoder_service=self.audio_encoder_service,
         )
 
-    def extra_scheduler_callbacks(self) -> dict[str, Any]:
+    def extra_scheduler_callbacks(self) -> dict[str, Callable[[], None] | None]:
         return {
             "shutdown_callback": (
                 self.audio_encoder_service.close
