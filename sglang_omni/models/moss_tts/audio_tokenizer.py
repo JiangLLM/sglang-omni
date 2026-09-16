@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
@@ -84,7 +84,7 @@ def resolve_moss_audio_attention_backend(
 
 # Note (Zhang Yiyang): Prefer the runtime model value, then the canonical config
 # field, and finally the legacy config alias for checkpoint compatibility.
-def resolve_moss_audio_sample_rate(model: Any, config: Any) -> int:
+def resolve_moss_audio_sample_rate(model: object, config: object) -> int:
     for value in (
         getattr(model, "sampling_rate", None),
         getattr(config, "sampling_rate", None),
@@ -110,7 +110,7 @@ class _MossAudioTokenizerV1FeedForward(nn.Module):
         self,
         linear1: nn.Module,
         linear2: nn.Module,
-        activation: Any,
+        activation: Callable[[torch.Tensor], torch.Tensor],
     ) -> None:
         super().__init__()
         self.linear1 = linear1
@@ -758,8 +758,7 @@ class MossAudioTokenizerVocoderDecoder(nn.ModuleList):
                     frame_rate *= stage.patch_size
         else:
             raise ValueError(
-                "MOSS-Audio-Tokenizer vocoder decoder requires config or "
-                "source_decoder"
+                "MOSS-Audio-Tokenizer vocoder decoder requires config or source_decoder"
             )
         stages = list(stages)
         if not stages:
@@ -1251,8 +1250,7 @@ class _ResidualLFQ(nn.Module):
         with torch.autocast(device_type=codes.device.type, enabled=False):
             if codes.ndim != 3:
                 raise ValueError(
-                    "MOSS quantizer codes must be [N, B, T], got "
-                    f"{tuple(codes.shape)}"
+                    f"MOSS quantizer codes must be [N, B, T], got {tuple(codes.shape)}"
                 )
             count, batch_size, frames = map(int, codes.shape)
             if not 0 < count <= self.num_quantizers:
