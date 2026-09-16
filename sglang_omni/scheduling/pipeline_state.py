@@ -46,7 +46,7 @@ class PipelineStateBase:
         raise NotImplementedError(f"{type(self).__name__} must implement to_dict()")
 
     @classmethod
-    def from_dict(cls: type[StateT], data: dict[str, Any]) -> StateT:
+    def from_dict(cls: type[StateT], data: dict[str, ValueT]) -> StateT:
         raise NotImplementedError(f"{cls.__name__} must implement from_dict()")
 
     @staticmethod
@@ -78,7 +78,7 @@ def _tensor_to_list(value: Any) -> Any:
     return value
 
 
-def _tensor_from_list(value: Any, _default: Any = None) -> torch.Tensor | None:
+def _tensor_from_list(value: Any, _default: object = None) -> torch.Tensor | None:
     if value is None:
         return None
     import torch
@@ -88,12 +88,12 @@ def _tensor_from_list(value: Any, _default: Any = None) -> torch.Tensor | None:
     return torch.tensor(value)
 
 
-def _tensor_items_to_lists(value: Any) -> Any:
+def _tensor_items_to_lists(value: Any) -> list[Any]:
     return [_tensor_to_list(item) for item in value]
 
 
 def _tensor_items_from_lists(
-    value: Any, _default: Any = None
+    value: Any, _default: object = None
 ) -> list[torch.Tensor | None] | None:
     if value is None:
         return None
