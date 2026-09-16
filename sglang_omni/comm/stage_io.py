@@ -76,7 +76,7 @@ def relay_device(relay: Relay) -> str:
     return device
 
 
-def extract_tensors(obj: Any, path: str = "") -> tuple[Any, dict[str, torch.Tensor]]:
+def extract_tensors(obj: object, path: str = "") -> tuple[Any, dict[str, torch.Tensor]]:
     if isinstance(obj, torch.Tensor):
         return {
             "_tensor_placeholder": path,
@@ -102,7 +102,7 @@ def extract_tensors(obj: Any, path: str = "") -> tuple[Any, dict[str, torch.Tens
 
 
 def extract_cuda_tensors(
-    obj: Any, path: str = ""
+    obj: object, path: str = ""
 ) -> tuple[Any, dict[str, torch.Tensor]]:
     if isinstance(obj, torch.Tensor):
         if obj.is_cuda:
@@ -130,7 +130,7 @@ def extract_cuda_tensors(
     return obj, {}
 
 
-def restore_tensors(obj: Any, tensors: dict[str, torch.Tensor]) -> Any:
+def restore_tensors(obj: object, tensors: dict[str, torch.Tensor]) -> Any:
     if isinstance(obj, dict):
         if "_tensor_placeholder" in obj:
             path = obj["_tensor_placeholder"]
@@ -821,7 +821,7 @@ def _ipc_pickle(obj: object) -> bytes:
     return buf.getvalue()
 
 
-def _serialize_direct_ipc_metadata_value(value: Any) -> Any:
+def _serialize_direct_ipc_metadata_value(value: object) -> Any:
     if isinstance(value, torch.Tensor):
         return {"_ipc_tensor": _ipc_pickle(value)}
     if isinstance(value, dict):
@@ -838,7 +838,7 @@ def _serialize_direct_ipc_metadata_value(value: Any) -> Any:
     return value
 
 
-def deserialize_direct_ipc_metadata(value: Any) -> Any:
+def deserialize_direct_ipc_metadata(value: object) -> Any:
     if isinstance(value, dict):
         if set(value) == {"_ipc_tensor"}:
             tensor_bytes = value["_ipc_tensor"]

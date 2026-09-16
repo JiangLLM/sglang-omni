@@ -45,7 +45,7 @@ class TensorMeta(msgspec.Struct, frozen=True):
     offset: int
     size: int
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, str | list[int] | int]:
         return {
             "path": self.path,
             "shape": list(self.shape),
@@ -56,7 +56,7 @@ class TensorMeta(msgspec.Struct, frozen=True):
         }
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "TensorMeta":
+    def from_dict(cls, value: dict[str, _Value]) -> "TensorMeta":
         return cls(
             path=_required(value, "path", str),
             shape=_int_tuple(value, "shape"),
@@ -74,7 +74,7 @@ class BackendRef(msgspec.Struct, frozen=True):
 
     @classmethod
     def from_relay_info(
-        cls, *, transport: TransportKind, relay_info: dict[str, Any]
+        cls, *, transport: TransportKind, relay_info: dict[str, _Value]
     ) -> "BackendRef":
         transfer_info = _required(relay_info, "transfer_info", dict)
         return cls(
@@ -91,7 +91,7 @@ class BackendRef(msgspec.Struct, frozen=True):
         }
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "BackendRef":
+    def from_dict(cls, value: dict[str, _Value]) -> "BackendRef":
         return cls(
             transport=TransportKind(_required(value, "transport", str)),
             info=_required(value, "info", dict),
@@ -107,7 +107,7 @@ class MetadataTensorRef(msgspec.Struct, frozen=True):
         return {"path": self.path, "ref": self.ref.to_dict()}
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "MetadataTensorRef":
+    def from_dict(cls, value: dict[str, _Value]) -> "MetadataTensorRef":
         return cls(
             path=_required(value, "path", str),
             ref=DataRef.from_dict(_required(value, "ref", dict)),
