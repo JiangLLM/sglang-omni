@@ -8,6 +8,7 @@ import logging
 import math
 import os
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any, Iterable, Optional, Tuple
 
@@ -302,10 +303,10 @@ class Qwen3TTSTalkerTextModel(nn.Module):
         )
         self._decode_feedback_embedding.weight.requires_grad_(False)
 
-    def get_input_embeddings(self):
+    def get_input_embeddings(self) -> nn.Embedding:
         return self.codec_embedding
 
-    def get_text_embeddings(self):
+    def get_text_embeddings(self) -> nn.Embedding:
         return self.text_embedding
 
     def _build_input_hidden_states(
@@ -867,7 +868,9 @@ class Qwen3TTSTalker(Qwen3TTSPromptBuilderMixin, nn.Module):
     # directly and use this marker to preserve that position contract.
     is_mrope_enabled = True
 
-    def __init__(self, config: Any, quant_config: Any = None, prefix: str = "") -> None:
+    def __init__(
+        self, config: Any, quant_config: object = None, prefix: str = ""
+    ) -> None:
         del quant_config
         super().__init__()
         if hasattr(config, "talker_config"):
@@ -1259,7 +1262,9 @@ class Qwen3TTSTalker(Qwen3TTSPromptBuilderMixin, nn.Module):
         )
 
     @contextmanager
-    def _predictor_graph_capture_state(self, bucket_size: int, signature: tuple):
+    def _predictor_graph_capture_state(
+        self, bucket_size: int, signature: tuple
+    ) -> Generator[None, None, None]:
         saved = (
             self._sub_batch_size,
             self._sub_has_sampled_rows,
