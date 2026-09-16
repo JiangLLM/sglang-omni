@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _CacheEntry:
-    data: Any
+    data: object
     size_bytes: int
 
 
@@ -28,7 +28,7 @@ def _to_pinned_host(value: torch.Tensor) -> torch.Tensor:
 
 
 def _detach_value(
-    value: Any, *, device: torch.device | None, pin_memory: bool = False
+    value: object, *, device: torch.device | None, pin_memory: bool = False
 ) -> Any:
     if isinstance(value, torch.Tensor):
         value = value.detach()
@@ -56,7 +56,7 @@ def _detach_value(
     return value
 
 
-def _value_size_bytes(value: Any) -> int:
+def _value_size_bytes(value: object) -> int:
     if isinstance(value, torch.Tensor):
         return int(value.numel() * value.element_size())
     if isinstance(value, (bytes, bytearray)):
@@ -110,7 +110,7 @@ class StageOutputCache:
             self._cache.move_to_end(key)
             return entry.data
 
-    def put(self, key: str | None, data: Any) -> None:
+    def put(self, key: str | None, data: object) -> None:
         if key is None:
             return
         key = str(key)
@@ -136,7 +136,7 @@ class StageOutputCache:
             self._cache.clear()
             self.current_bytes = 0
 
-    def remove_if_same(self, key: str | None, expected_data: Any) -> bool:
+    def remove_if_same(self, key: str | None, expected_data: object) -> bool:
         """Remove a key only if it still holds the observed object."""
         if key is None:
             return False
