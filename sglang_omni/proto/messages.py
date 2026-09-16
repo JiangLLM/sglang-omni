@@ -2,7 +2,7 @@
 """Control plane messages."""
 
 from dataclasses import dataclass
-from typing import Any, Literal, TypeAlias, TypedDict
+from typing import Any, Literal, TypeAlias, TypedDict, TypeVar
 
 import msgspec
 
@@ -12,6 +12,9 @@ from sglang_omni.proto.kv_transfer import (
     KVTransferReadyMessage,
 )
 from sglang_omni.proto.request import StagePayload
+
+
+_MessageValueT = TypeVar("_MessageValueT")
 
 
 class _DirectCudaIpcTensor(TypedDict):
@@ -98,7 +101,7 @@ class DataReadyMessage:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "DataReadyMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "DataReadyMessage":
         request_id = _require_str(d.get("request_id"), "request_id")
         from_stage = _require_str(d.get("from_stage"), "from_stage")
         to_stage = _require_str(d.get("to_stage"), "to_stage")
@@ -171,7 +174,7 @@ class DataAckMessage(msgspec.Struct):
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "DataAckMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "DataAckMessage":
         success = d.get("success")
         if not isinstance(success, bool):
             raise TypeError("data_ack success must be bool")
@@ -201,7 +204,7 @@ class AbortMessage:
         return {"type": "abort", "request_id": self.request_id}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "AbortMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "AbortMessage":
         return cls(request_id=d["request_id"])
 
 
@@ -226,7 +229,7 @@ class CompleteMessage:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "CompleteMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "CompleteMessage":
         return cls(
             request_id=d["request_id"],
             from_stage=d["from_stage"],
@@ -263,7 +266,7 @@ class StreamMessage:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "StreamMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "StreamMessage":
         return cls(
             request_id=d["request_id"],
             from_stage=d["from_stage"],
@@ -293,7 +296,7 @@ class SubmitMessage:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "SubmitMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "SubmitMessage":
         data = d["data"]
         if isinstance(data, dict) and data.get("_type") == "StagePayload":
             data = StagePayload.from_dict(data)
@@ -312,7 +315,7 @@ class ShutdownMessage:
         return {"type": "shutdown"}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ShutdownMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "ShutdownMessage":
         return cls()
 
 
@@ -335,7 +338,7 @@ class ProfilerStartMessage:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ProfilerStartMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "ProfilerStartMessage":
         return cls(
             run_id=d["run_id"],
             trace_path_template=d["trace_path_template"],
@@ -354,7 +357,7 @@ class ProfilerStopMessage:
         return {"type": "profiler_stop", "run_id": self.run_id}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ProfilerStopMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "ProfilerStopMessage":
         return cls(run_id=d.get("run_id"))
 
 
@@ -368,7 +371,7 @@ class AdminMessage:
         return {"type": "admin", "operation": self.operation.to_dict()}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "AdminMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "AdminMessage":
         return cls(operation=AdminOperation.from_dict(d["operation"]))
 
 
@@ -382,12 +385,12 @@ class AdminResultMessage:
         return {"type": "admin_result", "result": self.result.to_dict()}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "AdminResultMessage":
+    def from_dict(cls, d: dict[str, _MessageValueT]) -> "AdminResultMessage":
         return cls(result=AdminResult.from_dict(d["result"]))
 
 
 def parse_message(
-    d: dict[str, Any],
+    d: dict[str, _MessageValueT],
 ) -> (
     AdminMessage
     | AdminResultMessage
