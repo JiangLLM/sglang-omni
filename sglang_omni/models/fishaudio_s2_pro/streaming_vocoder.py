@@ -398,7 +398,7 @@ class S2ProVocoderScheduler(StreamingSimpleScheduler):
             )
 
         final_state = S2ProState.from_dict(payload.data)
-        final_data: dict[str, Any] = {
+        final_data: dict[str, object] = {
             "modality": "audio",
             "sample_rate": self._codec.sample_rate,
         }
