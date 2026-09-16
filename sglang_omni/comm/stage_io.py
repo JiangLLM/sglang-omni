@@ -8,7 +8,7 @@ import io
 import pickle
 from dataclasses import fields, is_dataclass
 from multiprocessing.reduction import ForkingPickler
-from typing import Any
+from typing import Any, Protocol, TypeVar
 
 import torch
 
@@ -22,7 +22,22 @@ from sglang_omni.comm.data_ref import (
     TransportKind,
 )
 from sglang_omni.proto import DataReadyMessage, StagePayload
-from sglang_omni.relay.base import Relay
+from sglang_omni.relay.base import Relay, RelayOperation
+
+_MetadataValue = TypeVar("_MetadataValue")
+
+
+class StageMessageSender(Protocol):
+    """Control-plane operation used to publish stage data references."""
+
+    async def send_to_stage(
+        self,
+        next_stage: str,
+        next_stage_endpoint: str,
+        msg: DataReadyMessage,
+        /,
+    ) -> None: ...
+
 
 _TORCH_DTYPES: dict[str, torch.dtype] = {
     "torch.bool": torch.bool,
@@ -122,8 +137,8 @@ def restore_tensors(obj: Any, tensors: dict[str, torch.Tensor]) -> Any:
 
 
 def strip_process_local_metadata(
-    metadata: dict[str, Any] | None,
-) -> dict[str, Any] | None:
+    metadata: dict[str, _MetadataValue] | None,
+) -> dict[str, _MetadataValue] | None:
     """Drop values that only mean something inside the sending process.
 
     A CUDA event orders a same-process consumer after the producer's stream;
@@ -382,7 +397,7 @@ async def write_payload(
     transport: TransportKind,
     from_stage: str | None = None,
     to_stage: str | None = None,
-) -> tuple[DataRef, Any]:
+) -> tuple[DataRef, RelayOperation]:
     data_without_tensors, tensors = extract_tensors(payload.data)
     packed, entries = _pack_tensors(tensors, device=relay_device(relay))
     header = StagePayload(
@@ -451,7 +466,7 @@ async def write_tensor(
     request_id: str | None = None,
     from_stage: str | None = None,
     to_stage: str | None = None,
-) -> tuple[DataRef, Any]:
+) -> tuple[DataRef, RelayOperation]:
     if not isinstance(tensor, torch.Tensor):
         raise TypeError(
             f"write_tensor requires torch.Tensor, got {type(tensor).__name__}"
@@ -522,7 +537,7 @@ async def write_stream_chunk(
     object_id: str | None = None,
     metadata: dict | None = None,
     transport: TransportKind,
-) -> tuple[DataRef, list[Any]]:
+) -> tuple[DataRef, list[RelayOperation]]:
     if object_id is None:
         object_id = f"{request_id}:stream:{from_stage}:{target_stage}:{chunk_id}"
     data_ref, op = await write_tensor(
@@ -568,7 +583,7 @@ async def read_stream_chunk(
 
 
 async def send_stream_signal(
-    control_plane: Any,
+    control_plane: StageMessageSender,
     *,
     request_id: str,
     target_stage: str,
@@ -598,7 +613,7 @@ async def _with_stream_metadata(
     data_ref: DataRef,
     metadata: dict | None,
     transport: TransportKind,
-    pending_ops: list[Any],
+    pending_ops: list[RelayOperation],
     *,
     receiver_id: str | None = None,
 ) -> DataRef:

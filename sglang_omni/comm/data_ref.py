@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Any, TypeVar
 
 import msgspec
+
+
+_Value = TypeVar("_Value")
 
 
 class TransportKind(str, Enum):
@@ -187,14 +190,14 @@ class DataRef(msgspec.Struct, frozen=True):
         )
 
 
-def _required(value: dict[str, Any], key: str, expected: type) -> Any:
+def _required(value: dict[str, Any], key: str, expected: type[_Value]) -> _Value:
     item = value[key]
     if type(item) is not expected:
         raise TypeError(f"{key} must be {expected.__name__}, got {type(item).__name__}")
     return item
 
 
-def _optional(value: dict[str, Any], key: str, expected: type) -> Any | None:
+def _optional(value: dict[str, Any], key: str, expected: type[_Value]) -> _Value | None:
     item = value.get(key)
     if item is None:
         return None
