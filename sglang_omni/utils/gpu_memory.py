@@ -8,9 +8,11 @@ import logging
 import os
 import re
 import tempfile
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -288,7 +290,7 @@ def get_gpu_startup_lock_path(
 
 
 @contextmanager
-def gpu_startup_lock(logical_gpu_id: int):
+def gpu_startup_lock(logical_gpu_id: int) -> Generator[Path, None, None]:
     """Serialize heavyweight scheduler construction on one visible GPU."""
 
     import fcntl
@@ -303,7 +305,7 @@ def gpu_startup_lock(logical_gpu_id: int):
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
-def _try_import_pynvml() -> Any | None:
+def _try_import_pynvml() -> ModuleType | None:
     try:
         return importlib.import_module("pynvml")
     except ModuleNotFoundError:

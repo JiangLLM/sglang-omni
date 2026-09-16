@@ -272,7 +272,7 @@ class _ReceiverAckOperation(RelayOperation):
         self,
         metadata: dict[str, Any] | _CudaKvMetadata,
         *,
-        held_references: tuple[Any, ...] = (),
+        held_references: tuple[object, ...] = (),
     ) -> None:
         self._metadata = metadata
         self._receiver_done = asyncio.get_running_loop().create_future()
@@ -399,7 +399,7 @@ class CudaIpcGetOperation(RelayOperation):
         wait_executor: ThreadPoolExecutor,
         start_event: torch.cuda.Event | None = None,
         done_event: torch.cuda.Event | None = None,
-        held_references: tuple[Any, ...] = (),
+        held_references: tuple[object, ...] = (),
         finish_on_interrupt: bool = False,
         emit_trace: bool = True,
     ) -> None:
