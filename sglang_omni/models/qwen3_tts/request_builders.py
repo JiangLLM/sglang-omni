@@ -801,7 +801,7 @@ def _qwen3_tts_voice_prompt_from_cache(
 ) -> tuple[dict[str, Any], str | None] | None:
     if artifact.get("artifact_type") != "qwen3_tts_voice_clone_prompt":
         return None
-    prompt: dict[str, Any] = {
+    prompt: dict[str, list[object]] = {
         "ref_spk_embedding": [
             embedding.detach().clone() for embedding in artifact["ref_spk_embedding"]
         ],
@@ -1714,7 +1714,7 @@ def make_qwen3_tts_scheduler_adapters(
                 f"Qwen3-TTS stream codes must be [Q] or [T, Q], got {tuple(codes.shape)}"
             )
 
-        metadata: dict[str, Any] = {
+        metadata: dict[str, object] = {
             "modality": "audio_codes",
             "stream": True,
             "num_quantizers": int(codes.shape[-1]),
