@@ -112,12 +112,12 @@ class PinnedTransferSlot:
     def view(self, numel: int) -> torch.Tensor:
         return self._buffer.view(numel)
 
-    def _device_guard(self) -> contextlib.AbstractContextManager[Any]:
+    def _device_guard(self) -> contextlib.AbstractContextManager[None]:
         if self.device.type == "cuda":
             return torch.cuda.device(self.device)
         return contextlib.nullcontext()
 
-    def record(self, stream: Any) -> None:
+    def record(self, stream: torch.cuda.Stream | None) -> None:
         """Record the completion event on ``stream``.
 
         ``stream`` must live on this slot's device; the event is created on
