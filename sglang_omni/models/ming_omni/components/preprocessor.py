@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable
-from typing import TYPE_CHECKING, Any
+from collections.abc import Awaitable, Mapping
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 import torch
@@ -37,6 +37,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_MessageT = TypeVar("_MessageT", bound=Mapping[str, object])
+
 # Ming-Omni chat template tokens
 ROLE_HUMAN = "<role>HUMAN</role>"
 ROLE_ASSISTANT = "<role>ASSISTANT</role>"
@@ -66,10 +68,10 @@ WHISPER_SAMPLE_RATE = 16000
 
 
 def compute_mel_spectrogram(
-    waveform: np.ndarray,
+    waveform: np.ndarray[tuple[int, ...], np.dtype[np.generic]],
     sample_rate: int = WHISPER_SAMPLE_RATE,
     n_mels: int = WHISPER_N_MELS,
-) -> np.ndarray:
+) -> np.ndarray[tuple[int, ...], np.dtype[np.generic]]:
     """Compute log-mel spectrogram features compatible with Whisper encoder.
 
     Args:
@@ -98,7 +100,7 @@ def compute_mel_spectrogram(
 
 
 def _compute_mel_features_for_waveform(
-    waveform: np.ndarray,
+    waveform: np.ndarray[tuple[int, ...], np.dtype[np.generic]],
     ds_kernel_size: int,
     ds_stride: int,
 ) -> tuple[torch.Tensor, int, int]:
@@ -161,7 +163,7 @@ def _inject_top_level_images(
         if msg.get("role") != "user":
             continue
         content = msg.get("content", "")
-        new_content: list[dict[str, Any]] = [
+        new_content: list[object] = [
             {"type": "image_url", "image_url": {"url": url}} for url in images
         ]
         if isinstance(content, str):
@@ -193,7 +195,7 @@ def _inject_top_level_audios(
         if msg.get("role") != "user":
             continue
         content = msg.get("content", "")
-        new_content: list[dict[str, Any]] = []
+        new_content: list[object] = []
         if isinstance(content, str):
             new_content.append({"type": "text", "text": content})
         elif isinstance(content, list):
@@ -221,7 +223,7 @@ def _inject_top_level_videos(
         if msg.get("role") != "user":
             continue
         content = msg.get("content", "")
-        new_content: list[dict[str, Any]] = []
+        new_content: list[object] = []
         if isinstance(content, str):
             new_content.append({"type": "text", "text": content})
         elif isinstance(content, list):
@@ -330,7 +332,7 @@ class MingPreprocessor:
         # Convert per-video tensors to numpy arrays in (T, H, W, C) uint8 — the
         # format Qwen2VLVideoProcessor expects when ``videos`` is a list of
         # per-video frame stacks.
-        np_videos: list[np.ndarray] = []
+        np_videos: list[np.ndarray[tuple[int, ...], np.dtype[np.uint8]]] = []
         for v in videos:
             t = v
             if isinstance(t, torch.Tensor):
@@ -390,8 +392,8 @@ class MingPreprocessor:
             messages = _inject_top_level_videos(messages, top_level_videos)
 
         # --- Extract image / video URLs/data from messages ---
-        raw_images: list[Any] = []
-        raw_videos: list[Any] = []
+        raw_images: list[object] = []
+        raw_videos: list[object] = []
         for msg in messages:
             content = msg.get("content", "")
             if isinstance(content, list):
@@ -497,8 +499,8 @@ class MingPreprocessor:
             results = []
 
         # Unpack results in the same order as they were appended
-        images: list[Any] = []
-        videos: list[Any] = []
+        images: list[object] = []
+        videos: list[object] = []
         idx = 0
         if image_coro is not None:
             img_result = results[idx]
@@ -517,7 +519,7 @@ class MingPreprocessor:
                 videos = vid_result[0] if isinstance(vid_result, tuple) else vid_result
         audio_results = results[idx:]
 
-        waveforms: list[np.ndarray] = [
+        waveforms: list[np.ndarray[tuple[int, ...], np.dtype[np.generic]]] = [
             a for a in audio_results if isinstance(a, np.ndarray)
         ]
 
@@ -647,7 +649,7 @@ class MingPreprocessor:
 
     def _build_prompt(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[_MessageT],
         *,
         audio_token_counts: list[int] | None = None,
         image_token_counts: list[int] | None = None,
