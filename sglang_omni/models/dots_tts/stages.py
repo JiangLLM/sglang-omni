@@ -8,7 +8,7 @@ import logging
 import math
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 import torch
 
@@ -25,7 +25,13 @@ from sglang_omni.scheduling.simple_scheduler import SimpleScheduler
 from sglang_omni.utils.audio_payload import audio_data_uri_from_reference
 from sglang_omni.utils.checkpoint import resolve_checkpoint
 
+if TYPE_CHECKING:
+    from dots_tts.models.dots_tts.config import ModelConfig
+
 _DEFAULT_CONTEXT_LENGTH = 2048
+
+_ValueT = TypeVar("_ValueT")
+_DefaultT = TypeVar("_DefaultT")
 
 
 def _configure_optimized_kernels() -> None:
@@ -58,21 +64,33 @@ def _configure_optimized_kernels() -> None:
     dit_inference.compile_module_forward = _compile_dit_step
 
 
-def _first_not_none(*values: Any, default: Any = None) -> Any:
+@overload
+def _first_not_none(
+    *values: _ValueT | None, default: _DefaultT
+) -> _ValueT | _DefaultT: ...
+
+
+@overload
+def _first_not_none(*values: _ValueT | None) -> _ValueT | None: ...
+
+
+def _first_not_none(
+    *values: _ValueT | None, default: _DefaultT | None = None
+) -> _ValueT | _DefaultT | None:
     return next((value for value in values if value is not None), default)
 
 
-def _dict(value: Any) -> dict[str, Any]:
+def _dict(value: object) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
-def _inputs(value: Any) -> dict[str, Any]:
+def _inputs(value: object) -> dict[str, Any]:
     if isinstance(value, str):
         return {"text": value}
     return _dict(value)
 
 
-def _reference_path(value: Any) -> str | None:
+def _reference_path(value: object) -> str | None:
     if value is None:
         return None
     if isinstance(value, str):
@@ -330,7 +348,9 @@ def preprocess_dots_tts_payload(
     return payload
 
 
-def _load_model_metadata(model_path: str) -> tuple[str, Any, Any, int]:
+def _load_model_metadata(
+    model_path: str,
+) -> tuple[str, ModelConfig, Any, int]:
     import_dots_tts()
     from dots_tts.models.dots_tts.config import ModelConfig
     from transformers import AutoTokenizer
