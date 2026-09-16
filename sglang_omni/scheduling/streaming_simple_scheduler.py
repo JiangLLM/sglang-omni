@@ -475,7 +475,7 @@ class StreamingSimpleScheduler:
             result = loop.run_until_complete(result)
         return result
 
-    def validate_stream_chunk_item(self, request_id: str, item: Any) -> StreamItem:
+    def validate_stream_chunk_item(self, request_id: str, item: object) -> StreamItem:
         if not isinstance(item, StreamItem):
             raise TypeError(
                 f"{self.__class__.__name__} expected StreamItem for "
@@ -494,7 +494,7 @@ class StreamingSimpleScheduler:
                 self.pending_done.discard(request_id)
                 self.handle_stream_done(request_id)
 
-    def handle_stream_chunk(self, request_id: str, item: Any) -> None:
+    def handle_stream_chunk(self, request_id: str, item: object) -> None:
         item = self.validate_stream_chunk_item(request_id, item)
         with self.state_lock:
             for out in self.on_stream_chunk(request_id, item):
@@ -546,7 +546,7 @@ class StreamingSimpleScheduler:
             if not self.is_aborted(request_id):
                 self.clear_request_state(request_id)
 
-    def emit_result(self, request_id: str, result: Any) -> None:
+    def emit_result(self, request_id: str, result: object) -> None:
         self.outbox.put(
             OutgoingMessage(
                 request_id=request_id,
