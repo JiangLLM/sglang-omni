@@ -63,7 +63,7 @@ class ImageMediaIO(MediaIO[Image.Image]):
             raise ValueError(f"Failed to identify image: {e}") from e
 
 
-def compute_image_cache_key(images: Any) -> str | None:
+def compute_image_cache_key(images: object) -> str | None:
     """Compute cache key from raw image inputs (paths, URLs, PIL Images).
 
     This should be called BEFORE ensure_image_list() to capture original
