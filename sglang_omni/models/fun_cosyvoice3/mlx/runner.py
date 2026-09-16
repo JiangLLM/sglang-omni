@@ -3,11 +3,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import mlx.core as mx
 
 from .model import SPEECH_TOKEN_SIZE
+
+if TYPE_CHECKING:
+    from sglang.srt.hardware_backend.mlx.sampling import (
+        MlxLogprobSpec,
+        MlxSamplingParams,
+    )
 
 _SPEECH_IDS = mx.arange(SPEECH_TOKEN_SIZE, dtype=mx.int32)
 # Note (yexiaodong): MLX streams are thread-local; bind this lookup on the
@@ -117,7 +123,7 @@ class FunCosyVoice3MlxModelRunner:
         req: Any | None = None,
         needs_logits: bool = True,
         logit_edit_row: mx.array | None = None,
-        logprob_spec: Any = None,
+        logprob_spec: MlxLogprobSpec | None = None,
     ):
         from sglang.srt.hardware_backend.mlx.model_runner import MlxPendingPrefill
 
@@ -172,7 +178,7 @@ class FunCosyVoice3MlxModelRunner:
             lazy_logprobs=lazy_logprobs,
         )
 
-    def _sampling_params_for_request(self, req: Any) -> Any:
+    def _sampling_params_for_request(self, req: Any) -> MlxSamplingParams:
         from sglang.srt.hardware_backend.mlx.sampling import (
             DEFAULT_SAMPLING_SEED,
             MlxSamplingParams,
@@ -198,7 +204,7 @@ class FunCosyVoice3MlxModelRunner:
         self,
         req_ids: list[str],
         edit_rows: mx.array | None = None,
-        logprob_spec: Any = None,
+        logprob_spec: MlxLogprobSpec | None = None,
         logits_hook: Any = None,
     ):
         if len(req_ids) != 1:
@@ -256,7 +262,7 @@ class FunCosyVoice3MlxModelRunner:
         req_ids: list[str],
         caches: list[list[Any]],
         edit_rows: mx.array | None = None,
-        logprob_spec: Any = None,
+        logprob_spec: MlxLogprobSpec | None = None,
     ):
         """Apply CosyVoice RAS fallback around SGLang's MLX sampler.
 
