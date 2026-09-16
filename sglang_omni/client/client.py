@@ -7,7 +7,7 @@ import asyncio
 import uuid
 from contextlib import aclosing
 from dataclasses import replace
-from typing import Any, AsyncIterator, Callable
+from typing import Any, AsyncIterator, Callable, TypedDict
 
 import numpy as np
 
@@ -32,6 +32,13 @@ from sglang_omni.client.types import (
 )
 from sglang_omni.pipeline.coordinator import Coordinator
 from sglang_omni.proto import OmniRequest, RequestState, StreamMessage
+
+
+class _EncodeAudioOptions(TypedDict, total=False):
+    response_format: str
+    sample_rate: int
+    speed: float
+    allow_format_fallback: bool
 
 
 class Client:
@@ -95,7 +102,7 @@ class Client:
         sample_rate: int | None = None
         last_chunk: GenerateChunk | None = None
         finish_reason: str | None = None
-        logprobs_parts: list[Any] = []
+        logprobs_parts: list[list[float | int]] = []
         saw_output_token_logprobs = False
         omni_rollout: dict[str, Any] | None = None
         weight_version: str | None = None
@@ -246,7 +253,7 @@ class Client:
             axis = -1 if arrays[0].ndim > 1 else 0
             audio_data = np.concatenate(arrays, axis=axis)
 
-        encode_kwargs: dict[str, Any] = {
+        encode_kwargs: _EncodeAudioOptions = {
             "response_format": response_format,
             "speed": speed,
             "allow_format_fallback": allow_format_fallback,
