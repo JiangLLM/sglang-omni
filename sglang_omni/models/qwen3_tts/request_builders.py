@@ -12,7 +12,7 @@ import threading
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 import torch
 
@@ -44,6 +44,12 @@ from sglang_omni.scheduling.speaker_cache import (
 )
 from sglang_omni.scheduling.streaming_vocoder import INITIAL_CODEC_CHUNK_FRAMES_PARAM
 from sglang_omni.utils.audio_payload import audio_data_uri_from_reference
+
+if TYPE_CHECKING:
+    import numpy as np
+    import numpy.typing as npt
+
+_RefCodeT = TypeVar("_RefCodeT")
 
 QWEN3_TTS_DEFAULT_MAX_NEW_TOKENS = 2048
 QWEN3_TTS_TASK_BASE = "Base"
@@ -114,6 +120,35 @@ class SubtalkerSampling:
     top_k: int
 
 
+class _PromptTextWrapper(Protocol):
+    def _tokenize_texts(self, texts: list[str]) -> list[torch.Tensor]: ...
+
+    def _build_assistant_text(self, text: str) -> str: ...
+
+
+class _CustomVoicePromptBuilder(Protocol):
+    def build_custom_voice_inputs(
+        self,
+        *,
+        input_id: torch.Tensor,
+        voice: str,
+        language: str,
+        non_streaming_mode: bool,
+        instruct_id: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]: ...
+
+
+class _VoiceDesignPromptBuilder(Protocol):
+    def build_voice_design_inputs(
+        self,
+        *,
+        input_id: torch.Tensor,
+        language: str,
+        non_streaming_mode: bool,
+        instruct_id: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]: ...
+
+
 def resolve_subtalker_sampling(gen_kwargs: dict[str, Any]) -> SubtalkerSampling:
     """Subtalker sampling from merged generate kwargs, with the fallbacks used
     when the checkpoint ships no generation config."""
@@ -132,7 +167,7 @@ class Qwen3TTSSGLangRequestData(SGLangARRequestData):
     enforce_request_limits: bool = True
     output_codes: list[torch.Tensor] = field(default_factory=list)
     latest_stream_code_chunk: torch.Tensor | None = None
-    codes_ready_event: Any = None
+    codes_ready_event: torch.cuda.Event | None = None
     stream_ref_sent: bool = False
     stream_codec_output: bool = False
     suppress_bootstrap_silence: bool = False
@@ -174,7 +209,7 @@ class Qwen3TTSPreprocessingContext:
     # note (luojiaxuan): in-process preprocessing runs its GPU work on this
     # stream so it never queues behind the talker's step on the default
     # stream; the scheduler waits on the per-request event before reading.
-    stream: Any = None
+    stream: torch.cuda.Stream | None = None
 
 
 _PREPROCESSING_CONTEXT: Qwen3TTSPreprocessingContext | None = None
@@ -761,7 +796,7 @@ def _new_cuda_encode_stream(device: torch.device) -> torch.cuda.Stream | None:
     return torch.cuda.Stream(device=device)
 
 
-def _record_ref_code_consumer_stream(ref_code: Any) -> Any:
+def _record_ref_code_consumer_stream(ref_code: _RefCodeT) -> _RefCodeT:
     # note (luojiaxuan): reference codes may be allocated on the batcher's
     # private stream; register the consumer stream with the caching allocator
     # so a later batch cannot recycle the block while reads are still queued.
@@ -811,13 +846,15 @@ class _Qwen3TTSRefCodeBatcher:
         self._queue.put(_QWEN3_TTS_REF_CODE_BATCH_STOP)
         self._thread.join(timeout=5.0)
 
-    def encode(self, waveform: Any, sample_rate: int) -> torch.Tensor:
+    def encode(
+        self, waveform: str | npt.NDArray[np.generic], sample_rate: int
+    ) -> torch.Tensor:
         return _record_ref_code_consumer_stream(
             self.submit(waveform, sample_rate).result(timeout=130.0)
         )
 
     def submit(
-        self, waveform: Any, sample_rate: int
+        self, waveform: str | npt.NDArray[np.generic], sample_rate: int
     ) -> concurrent.futures.Future[torch.Tensor]:
         future: concurrent.futures.Future[torch.Tensor] = concurrent.futures.Future()
         self._queue.put((waveform, int(sample_rate), future))
@@ -866,7 +903,9 @@ class _Qwen3TTSRefCodeBatcher:
         for device in accelerator_devices:
             torch.get_device_module(device).current_stream(device).synchronize()
 
-    def _encode_waveform(self, waveform: Any, sample_rate: int) -> torch.Tensor:
+    def _encode_waveform(
+        self, waveform: str | npt.NDArray[np.generic], sample_rate: int
+    ) -> torch.Tensor:
         """Codes (frames, quantizers) of one reference, frames = ceil(samples / hop)."""
         audio = self._speech_tokenizer._normalize_audio_inputs(
             [waveform], sr=sample_rate
@@ -1203,8 +1242,8 @@ def _prepare_qwen3_tts_base_request(
 def _prepare_qwen3_tts_custom_voice_request(
     *,
     state: Qwen3TTSState,
-    model: Any,
-    wrapper: Any,
+    model: _CustomVoicePromptBuilder,
+    wrapper: _PromptTextWrapper,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
     input_id = wrapper._tokenize_texts([wrapper._build_assistant_text(state.text)])[0]
     # Note(yzxiao): QwenLM/Qwen3-TTS (qwen-tts 0.1.1) drops 0.6B instructions
@@ -1224,8 +1263,8 @@ def _prepare_qwen3_tts_custom_voice_request(
 def _prepare_qwen3_tts_voice_design_request(
     *,
     state: Qwen3TTSState,
-    model: Any,
-    wrapper: Any,
+    model: _VoiceDesignPromptBuilder,
+    wrapper: _PromptTextWrapper,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
     input_id = wrapper._tokenize_texts([wrapper._build_assistant_text(state.text)])[0]
     instruct_id = _build_instruct_id(wrapper, state.instructions)
