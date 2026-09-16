@@ -44,7 +44,7 @@ def _get_context() -> AuKPreprocessingContext:
     return _CONTEXT
 
 
-def _normalize_inputs(inputs: Any) -> tuple[str, list[dict[str, Any]], Any | None]:
+def _normalize_inputs(inputs: object) -> tuple[str, list[dict[str, Any]], Any | None]:
     """Accept flat text, a dict payload, or a structured references list."""
     if isinstance(inputs, str):
         return inputs, [], None
@@ -68,7 +68,7 @@ def _normalize_inputs(inputs: Any) -> tuple[str, list[dict[str, Any]], Any | Non
 
 
 def _resolve_reference(
-    references: list[dict[str, Any]], fallback: Any | None
+    references: list[dict[str, Any]], fallback: object
 ) -> Any | None:
     if fallback is not None:
         return fallback
@@ -106,7 +106,12 @@ def _resolve_seed(raw: Any) -> int | None:
         raise ValueError(f"AuK seed must be an integer, got {raw!r}") from exc
 
 
-def _load_reference(source: Any, sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
+def _load_reference(
+    source: Any, sample_rate: int
+) -> tuple[
+    np.ndarray[tuple[int, ...], np.dtype[np.float32]],
+    np.ndarray[tuple[int, ...], np.dtype[np.float32]],
+]:
     import librosa
 
     if isinstance(source, str):
@@ -178,8 +183,8 @@ def build_auk_state(payload: StagePayload, config: AuKRuntimeConfig) -> AuKState
 
     clip_seconds = _get_context().max_seconds if _CONTEXT is not None else C.MAX_SECONDS
 
-    ref_audio: np.ndarray | None = None
-    qwen_audio: np.ndarray | None = None
+    ref_audio: np.ndarray[tuple[int, ...], np.dtype[np.float32]] | None = None
+    qwen_audio: np.ndarray[tuple[int, ...], np.dtype[np.float32]] | None = None
     ref_seconds = 0.0
     if ref_source is not None:
         ref_audio, qwen_audio = _load_reference(ref_source, config.sample_rate)
