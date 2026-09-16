@@ -662,7 +662,7 @@ def resolve_x_vector_only_mode(
 def build_generation_kwargs(
     params: dict[str, Any],
     *,
-    tts_params: dict[str, Any],
+    tts_params: dict[str, _TTSParamValueT],
     tts_engine_params: dict[str, Any],
 ) -> dict[str, Any]:
     explicit_generation_params = tts_params.get("explicit_generation_params")
@@ -749,6 +749,16 @@ def _qwen3_tts_uploaded_voice_cache_key(state: Qwen3TTSState) -> SpeakerCacheKey
     )
 
 
+class _OptionalVoicePrompt(TypedDict, total=False):
+    ref_code: list[torch.Tensor | None]
+    x_vector_only_mode: list[bool]
+
+
+class _VoicePrompt(_OptionalVoicePrompt):
+    ref_spk_embedding: list[torch.Tensor]
+    icl_mode: list[bool]
+
+
 class _OptionalCachedVoicePrompt(TypedDict, total=False):
     ref_code: tuple[torch.Tensor, ...]
 
@@ -761,7 +771,7 @@ class _CachedVoicePrompt(_OptionalCachedVoicePrompt):
 
 
 def _cacheable_qwen3_tts_voice_prompt(
-    voice_clone_prompt: dict[str, Any],
+    voice_clone_prompt: dict[str, Any] | _VoicePrompt,
     *,
     ref_text: str | None,
 ) -> _CachedVoicePrompt:
@@ -983,7 +993,7 @@ class _Qwen3TTSRefCodeBatcher:
 class _Qwen3TTSAdhocReferenceHook(
     KeyedReferenceEncodeHook[
         _Qwen3TTSAdhocReferenceInput,
-        tuple[dict[str, Any], str | None],
+        tuple[dict[str, Any] | _VoicePrompt, str | None],
         _CachedVoicePrompt,
     ]
 ):
@@ -1036,7 +1046,7 @@ class _Qwen3TTSAdhocReferenceHook(
 
     def encode_one(
         self, item: _Qwen3TTSAdhocReferenceInput
-    ) -> tuple[dict[str, Any], str | None]:
+    ) -> tuple[_VoicePrompt, str | None]:
         if not item.x_vector_only_mode and not item.ref_text:
             raise ValueError(
                 "ref_text is required when x_vector_only_mode=False (ICL mode)"
@@ -1070,7 +1080,7 @@ class _Qwen3TTSAdhocReferenceHook(
                 if ref_code_future is not None
                 else None
             )
-        voice_clone_prompt = {
+        voice_clone_prompt: _VoicePrompt = {
             "ref_code": [ref_code],
             "ref_spk_embedding": [speaker_embedding],
             "x_vector_only_mode": [item.x_vector_only_mode],
@@ -1079,7 +1089,7 @@ class _Qwen3TTSAdhocReferenceHook(
         return voice_clone_prompt, item.ref_text
 
     def store_artifact(
-        self, artifact: tuple[dict[str, Any], str | None]
+        self, artifact: tuple[dict[str, Any] | _VoicePrompt, str | None]
     ) -> _CachedVoicePrompt:
         voice_clone_prompt, ref_text = artifact
         return _cacheable_qwen3_tts_voice_prompt(
