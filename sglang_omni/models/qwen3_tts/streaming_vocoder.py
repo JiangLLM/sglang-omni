@@ -11,7 +11,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import count
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping, TypeVar
 
 import torch
 
@@ -108,8 +108,8 @@ def _decode_graph_frame_counts(
 @dataclass
 class _Qwen3TTSStreamState:
     code_chunks: list[torch.Tensor] = field(default_factory=list)
-    codes_ready: Any = None
-    pending_codes_ready: Any = None
+    codes_ready: torch.cuda.Event | None = None
+    pending_codes_ready: torch.cuda.Event | None = None
     total_frames: int = 0
     pruned_frames: int = 0
     ref_frames: int = 0
@@ -135,8 +135,8 @@ class _Qwen3TTSStreamState:
 
 @dataclass(eq=False)
 class _PendingIncrementalGroup:
-    group: list[Any]
-    handle: Any
+    group: list[tuple[str, _Qwen3TTSStreamState, _IncrementalDecodePlan]]
+    handle: _Qwen3TTSDecodeHandle
     claimed_slots: list[int]
 
 
@@ -195,6 +195,9 @@ class _Qwen3TTSDecodePlan:
     chunks: tuple[torch.Tensor, ...] = ()
 
 
+_DecodePlanT = TypeVar("_DecodePlanT", _Qwen3TTSDecodePlan, _IncrementalDecodePlan)
+
+
 def _bad_row_message(indices: list[int] | tuple[int, ...]) -> str:
     return (
         "Qwen3-TTS decoder input contains codec ids outside "
@@ -202,7 +205,7 @@ def _bad_row_message(indices: list[int] | tuple[int, ...]) -> str:
     )
 
 
-def _raise_for_bad_rows(bad_rows: Any, count: int) -> None:
+def _raise_for_bad_rows(bad_rows: torch.Tensor, count: int) -> None:
     indices = bad_rows[:count].nonzero().flatten().tolist()
     if not indices:
         return
@@ -235,11 +238,11 @@ class _DecodeSlot:
 class _RetainedDecodeResources:
     """Strong references kept alive when CUDA completion could not be proven."""
 
-    owner: Any
-    stream: Any
+    owner: Qwen3TTSStreamingVocoderScheduler | None
+    stream: torch.cuda.Stream | None
     slot: _DecodeSlot | None
     decoder_input: torch.Tensor | None
-    keepalives: list[Any]
+    keepalives: list[torch.Tensor]
 
 
 # Note (jiannan-17): when neither the completion event nor the exact decode
@@ -265,11 +268,11 @@ class _Qwen3TTSDecodeHandle:
     deltas: list[torch.Tensor]
     bad_rows: torch.Tensor | None
     slot: _DecodeSlot | None = None
-    owner: Any = None
-    stream: Any = None
+    owner: Qwen3TTSStreamingVocoderScheduler | None = None
+    stream: torch.cuda.Stream | None = None
     decoder_input_keepalive: torch.Tensor | None = None
-    keepalives: list[Any] = field(default_factory=list)
-    incremental: Any = None
+    keepalives: list[torch.Tensor] = field(default_factory=list)
+    incremental: _IncrementalDecodeBatch | None = None
     _done: bool = field(default=False, init=False, repr=False)
     _failure: str | None = field(default=None, init=False, repr=False)
     _bad_row_indices: tuple[int, ...] | None = field(
@@ -1652,12 +1655,12 @@ class Qwen3TTSStreamingVocoderScheduler(
             return greatest_priority + 1
         return greatest_priority
 
-    def _decode_stream_context(self) -> Any:
+    def _decode_stream_context(self) -> contextlib.AbstractContextManager[None]:
         if self._decode_stream is None:
             return contextlib.nullcontext()
         return torch.cuda.stream(self._decode_stream)
 
-    def _screen_out_of_range_codes(self, decoder_input: torch.Tensor) -> Any:
+    def _screen_out_of_range_codes(self, decoder_input: torch.Tensor) -> torch.Tensor:
         # Note (Jiaxin Deng): an out-of-range id makes the codec embedding lookup
         # raise a device-side error, which may poison the accelerator context and
         # kill every in-flight stream in this process; validate_chunk only checks
@@ -1862,7 +1865,7 @@ class Qwen3TTSStreamingVocoderScheduler(
             ),
         )
         gpu_input: torch.Tensor | None = None
-        keepalives: list[Any] = []
+        keepalives: list[torch.Tensor] = []
         try:
             with torch.cuda.stream(stream):
                 gpu_input = self._stage_decoder_input(
@@ -2291,7 +2294,10 @@ class Qwen3TTSStreamingVocoderScheduler(
         *,
         is_final: bool,
         max_generated_frames: int | None,
-    ) -> tuple[Any, bool]:
+    ) -> (
+        tuple[_IncrementalDecodePlan | None, Literal[True]]
+        | tuple[_Qwen3TTSDecodePlan | None, Literal[False]]
+    ):
         """Plan one decode, preferring the incremental path.
 
         Returns ``(plan, is_incremental)``; a ``None`` plan means there is no
@@ -2402,7 +2408,11 @@ class Qwen3TTSStreamingVocoderScheduler(
         *,
         stream: torch.cuda.Stream | None,
     ) -> (
-        tuple[list[tuple[str, _Qwen3TTSStreamState, _Qwen3TTSDecodePlan]], list] | None
+        tuple[
+            list[tuple[str, _Qwen3TTSStreamState, _Qwen3TTSDecodePlan]],
+            list[torch.Tensor],
+        ]
+        | None
     ):
         """Decode a group, failing only the rows that carried invalid codes."""
         while group:
@@ -2458,7 +2468,10 @@ class Qwen3TTSStreamingVocoderScheduler(
         *,
         stream: torch.cuda.Stream | None,
     ) -> (
-        tuple[list[tuple[str, _Qwen3TTSStreamState, _IncrementalDecodePlan]], list]
+        tuple[
+            list[tuple[str, _Qwen3TTSStreamState, _IncrementalDecodePlan]],
+            list[torch.Tensor],
+        ]
         | None
     ):
         """Decode a cohort and return the surviving entries with their deltas."""
@@ -2517,7 +2530,10 @@ class Qwen3TTSStreamingVocoderScheduler(
         self,
         pending: _PendingIncrementalGroup,
     ) -> (
-        tuple[list[tuple[str, _Qwen3TTSStreamState, _IncrementalDecodePlan]], list]
+        tuple[
+            list[tuple[str, _Qwen3TTSStreamState, _IncrementalDecodePlan]],
+            list[torch.Tensor],
+        ]
         | None
     ):
         """Resolve a launched cohort: rows with invalid codes fail, the rest commit.
@@ -2592,11 +2608,11 @@ class Qwen3TTSStreamingVocoderScheduler(
 
     @staticmethod
     def _group_decode_plans(
-        planned: list[tuple[str, _Qwen3TTSStreamState, _Qwen3TTSDecodePlan]],
-    ) -> list[list[tuple[str, _Qwen3TTSStreamState, _Qwen3TTSDecodePlan]]]:
+        planned: list[tuple[str, _Qwen3TTSStreamState, _DecodePlanT]],
+    ) -> list[list[tuple[str, _Qwen3TTSStreamState, _DecodePlanT]]]:
         groups: dict[
             tuple[int, ...],
-            list[tuple[str, _Qwen3TTSStreamState, _Qwen3TTSDecodePlan]],
+            list[tuple[str, _Qwen3TTSStreamState, _DecodePlanT]],
         ] = {}
         for entry in planned:
             groups.setdefault(tuple(entry[2].decoder_input.shape), []).append(entry)
