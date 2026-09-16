@@ -1,0 +1,5 @@
+# Run the repository's install.sh first for native SGLang-Omni MLX ASR.
+# This text processor uses the same MLX installation, without mlx-audio.
+mlx-lm>=0.31.3,<1
+# Hugging Face uses HTTPX; support macOS environments with a SOCKS proxy.
+httpx[socks]>=0.28,<1
