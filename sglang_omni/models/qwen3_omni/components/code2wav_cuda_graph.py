@@ -15,7 +15,7 @@ from contextlib import AbstractContextManager
 from copy import deepcopy
 from dataclasses import dataclass
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
 
 import torch
 
@@ -107,6 +107,13 @@ class _CapturedGraph:
     graph: Any
     static_input: torch.Tensor
     static_output: torch.Tensor
+
+
+_CaptureAttemptResult: TypeAlias = (
+    tuple[Literal["shrink"], list[GraphKey]]
+    | tuple[Literal["disable"], tuple[dict[GraphKey, _CapturedGraph], str]]
+    | tuple[Literal["published"], tuple[dict[GraphKey, _CapturedGraph], object, object]]
+)
 
 
 class _BuildFailure(RuntimeError):
@@ -283,8 +290,8 @@ class Code2WavCudaGraphRunner:
         # per step, so they are cached and refreshed where the key set changes
         # (publish, rollback, runtime disable) instead of rescanned per call.
         self._sizes_by_frames: dict[int, tuple[int, ...]] = {}
-        self._pool: Any | None = None
-        self._capture_stream: Any | None = None
+        self._pool: object = None
+        self._capture_stream: object = None
         self._enabled = False
         self._disable_reason: str | None = None
         self._build_stats: dict[str, int] = {
@@ -428,7 +435,7 @@ class Code2WavCudaGraphRunner:
         graph_budget: int,
         tier1_keys: tuple[GraphKey, ...],
         tier1_info: _Tier1Stats,
-    ) -> tuple[str, Any]:
+    ) -> _CaptureAttemptResult:
         """Capture every requested key into one fresh shared pool.
 
         Tier-1 keys go first, largest-first so the pool's peak blocks are laid
