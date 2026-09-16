@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, TypedDict, TypeVar
+from typing import TYPE_CHECKING, Any, TypedDict, TypeVar
 
 import torch
 import xxhash
@@ -23,7 +23,15 @@ from sglang_omni.models.qwen3_omni.pending_text_queue import (
 from sglang_omni.proto import OmniRequest, StagePayload
 from sglang_omni.scheduling.messages import OutgoingMessage
 from sglang_omni.scheduling.sglang_backend import SGLangARRequestData
-from sglang_omni.scheduling.types import ARRequestData
+from sglang_omni.scheduling.types import ARRequestData, RequestOutput
+
+if TYPE_CHECKING:
+    from transformers.models.qwen3_omni_moe.configuration_qwen3_omni_moe import (
+        Qwen3OmniMoeThinkerConfig,
+    )
+
+    from sglang_omni.models.qwen3_omni.components.talker import Qwen3OmniTalker
+    from sglang_omni.pipeline.stage.stream_queue import StreamItem
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +243,7 @@ def apply_encoder_result(
     state: Qwen3OmniPipelineState,
     *,
     stage_name: str,
-    result: Any,
+    result: object,
 ) -> None:
     if isinstance(result, EncoderRequestData):
         encoder_out = result.skip_result if result.skip_result is not None else {}
@@ -415,7 +423,7 @@ def _project_encoder_input_metadata(
 
 
 def _encoder_stages_with_model_inputs(
-    encoder_inputs: dict[str, dict[str, Any]],
+    encoder_inputs: dict[str, _ValueT],
 ) -> list[str]:
     return [
         stage_name
@@ -425,7 +433,7 @@ def _encoder_stages_with_model_inputs(
 
 
 def _active_encoder_stages(
-    encoder_inputs: dict[str, dict[str, Any]],
+    encoder_inputs: dict[str, _ValueT],
 ) -> list[str]:
     return [
         stage_name
@@ -434,7 +442,7 @@ def _active_encoder_stages(
     ]
 
 
-def _is_active_encoder_branch(stage_name: str, stage_inputs: Any) -> bool:
+def _is_active_encoder_branch(stage_name: str, stage_inputs: object) -> bool:
     if not isinstance(stage_inputs, dict) or stage_inputs.get("_skip"):
         return False
     active_marker = stage_inputs.get("_active")
@@ -443,7 +451,7 @@ def _is_active_encoder_branch(stage_name: str, stage_inputs: Any) -> bool:
     return _has_encoder_model_input(stage_name, stage_inputs)
 
 
-def _has_encoder_model_input(stage_name: str, stage_inputs: Any) -> bool:
+def _has_encoder_model_input(stage_name: str, stage_inputs: object) -> bool:
     if not isinstance(stage_inputs, dict) or stage_inputs.get("_skip"):
         return False
     if stage_inputs.get("_active") is False:
@@ -531,7 +539,7 @@ def build_thinker_request(
 def _compute_mrope_positions(
     input_ids: torch.Tensor,
     model_inputs: dict[str, Any],
-    thinker_config: Any,
+    thinker_config: Qwen3OmniMoeThinkerConfig,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute M-RoPE positions for multimodal inputs."""
     from sglang_omni.models.qwen3_omni.mrope_positions import (
@@ -596,7 +604,7 @@ def build_sglang_thinker_request(
     tokenizer: Any,
     vocab_size: int,
     request_id: str | None = None,
-    thinker_config: Any = None,
+    thinker_config: Qwen3OmniMoeThinkerConfig | None = None,
 ) -> "SGLangARRequestData":
     """Build SGLangARRequestData from pipeline state.
 
@@ -753,7 +761,7 @@ def build_sglang_talker_request(
     ) = None,
     tts_pad_embed: torch.Tensor | None = None,
     thinker_chunks_done: bool = True,
-    thinker_config: Any = None,
+    thinker_config: Qwen3OmniMoeThinkerConfig | None = None,
     talker_model_inputs: dict[str, Any] | None = None,
     seed: int | None = None,
 ) -> "SGLangARRequestData":
@@ -888,7 +896,7 @@ def apply_thinker_result(
     state: Qwen3OmniPipelineState,
     *,
     stage_name: str,
-    result: Any,
+    result: ARRequestData,
 ) -> ThinkerOutput:
     output_ids = list(result.output_ids)
     thinker_out: ThinkerOutput = {
@@ -915,7 +923,9 @@ def apply_thinker_result(
     return thinker_out
 
 
-def make_thinker_stream_output_builder():
+def make_thinker_stream_output_builder() -> Callable[
+    [str, SGLangARRequestData, RequestOutput], list[OutgoingMessage]
+]:
     def _normalize_chunk_hidden(hidden: torch.Tensor | None) -> torch.Tensor | None:
         if hidden is None:
             return None
@@ -947,7 +957,7 @@ def make_thinker_stream_output_builder():
         return _normalize_chunk_hidden(embed), _normalize_chunk_hidden(layer_hidden)
 
     def _build_stream_output(
-        request_id: str, req_data: Any, req_output: Any
+        request_id: str, req_data: SGLangARRequestData, req_output: RequestOutput
     ) -> list[OutgoingMessage]:
         req = getattr(req_data, "req", None)
         if req is not None and req.inflight_middle_chunks > 0:
@@ -1009,7 +1019,7 @@ def make_thinker_scheduler_adapters(
     *,
     tokenizer: Any,
     vocab_size: int,
-    thinker_config: Any = None,
+    thinker_config: Qwen3OmniMoeThinkerConfig | None = None,
     stage_name: str = "thinker",
 ) -> tuple[
     Callable[[StagePayload], SGLangARRequestData],
@@ -1048,9 +1058,9 @@ def make_talker_scheduler_adapters(
     *,
     tokenizer: Any,
     codec_vocab_size: int,
-    model: Any,
+    model: Qwen3OmniTalker,
     model_path: str,
-    thinker_config: Any,
+    thinker_config: Qwen3OmniMoeThinkerConfig | None,
     required_aux_hidden_key: int,
     codec_bos_id: int = 2149,
     codec_eos_id: int | None = None,
@@ -1070,7 +1080,12 @@ def make_talker_scheduler_adapters(
     user_token_id: int = 872,
     assistant_token_id: int = 77091,
     speaker_map: dict[str, int] | None = None,
-):
+) -> tuple[
+    Callable[[StagePayload], SGLangARRequestData],
+    Callable[[SGLangARRequestData], StagePayload],
+    Callable[[SGLangARRequestData, StreamItem], None],
+    Callable[[SGLangARRequestData], None],
+]:
     """Build model-specific StagePayload <-> scheduler adapters for talker."""
     prefill_builder = TalkerPrefillBuilder(
         model=model,
@@ -1154,7 +1169,7 @@ def _build_talker_request_data(
     audio_token_id: int | None,
     image_token_id: int | None,
     video_token_id: int | None,
-    thinker_config: Any,
+    thinker_config: Qwen3OmniMoeThinkerConfig | None,
     resolve_sampling_config: Callable[[dict[str, Any]], _TalkerSamplingConfig],
 ) -> SGLangARRequestData:
     params = payload.request.params
