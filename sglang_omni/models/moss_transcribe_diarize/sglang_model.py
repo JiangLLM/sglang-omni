@@ -203,7 +203,7 @@ class MossTranscribeDiarizeForConditionalGeneration(nn.Module):
     def _get_audio_feature_uncached(
         self,
         items: List[MultimodalDataItem],
-        forward_batch: ForwardBatch,
+        forward_batch: ForwardBatch | None,
     ) -> torch.Tensor:
         merge_size = int(self.config.audio_merge_size)
         device = next(self.whisper_encoder.parameters()).device
