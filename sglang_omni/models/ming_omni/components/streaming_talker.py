@@ -17,7 +17,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import numpy as np
 import torch
@@ -32,6 +32,20 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_VOICE = "DB30"
 DEFAULT_SAMPLE_RATE = 44100
+
+
+class _AudioChunkPayloadRequired(TypedDict):
+    modality: str
+    audio_waveform: bytes
+    audio_waveform_shape: list[int]
+    audio_waveform_dtype: str
+    sample_rate: int
+    stage_name: str
+    segment_id: int
+
+
+class _AudioChunkPayload(_AudioChunkPayloadRequired, total=False):
+    talker_first_audio_ms: float
 
 
 @dataclass
@@ -266,7 +280,7 @@ class MingStreamingTalkerScheduler:
         segment_id: int,
     ) -> None:
         audio_bytes, shape, dtype = self._serialize_waveform(waveform)
-        payload: dict[str, Any] = {
+        payload: _AudioChunkPayload = {
             "modality": "audio",
             "audio_waveform": audio_bytes,
             "audio_waveform_shape": shape,
@@ -321,7 +335,7 @@ class MingStreamingTalkerScheduler:
 
     # ------------------------------------------------------------------ helpers
     @staticmethod
-    def _extract_waveform(item: Any) -> Any | None:
+    def _extract_waveform(item: object) -> Any | None:
         if isinstance(item, tuple):
             return item[0] if item else None
         return item
@@ -362,7 +376,7 @@ class MingStreamingTalkerScheduler:
         return self._sample_rate
 
     @staticmethod
-    def _sample_rate_from(owner: Any) -> int | None:
+    def _sample_rate_from(owner: object) -> int | None:
         if owner is None:
             return None
         config = getattr(owner, "config", None)
