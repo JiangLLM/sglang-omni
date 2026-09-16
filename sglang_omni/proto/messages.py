@@ -2,7 +2,7 @@
 """Control plane messages."""
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, TypeAlias, TypedDict
 
 import msgspec
 
@@ -14,6 +14,39 @@ from sglang_omni.proto.kv_transfer import (
 from sglang_omni.proto.request import StagePayload
 
 
+class _DirectCudaIpcTensor(TypedDict):
+    path: str
+    tensor_bytes: bytes
+
+
+class _DirectCudaIpcPayloadRef(TypedDict):
+    _type: Literal["TorchCudaIpcPayload"]
+    version: Literal[1]
+    header: bytes
+    tensors: list[_DirectCudaIpcTensor]
+
+
+class _OptionalDirectCudaIpcStreamChunkRef(TypedDict, total=False):
+    metadata: dict[str, object]
+
+
+class _DirectCudaIpcStreamChunkRef(_OptionalDirectCudaIpcStreamChunkRef):
+    _type: Literal["TorchCudaIpcStreamChunk"]
+    version: Literal[1]
+    tensor_bytes: bytes
+
+
+class _InlineStreamChunkRef(TypedDict):
+    _type: Literal["InlineStreamChunk"]
+    version: Literal[1]
+    payload: bytes
+
+
+_StageDataRef: TypeAlias = (
+    _DirectCudaIpcPayloadRef | _DirectCudaIpcStreamChunkRef | _InlineStreamChunkRef
+)
+
+
 @dataclass
 class DataReadyMessage:
     """Notify next stage that a data-plane object is ready."""
@@ -21,7 +54,7 @@ class DataReadyMessage:
     request_id: str
     from_stage: str
     to_stage: str
-    data_ref: dict[str, Any] | None
+    data_ref: dict[str, Any] | _StageDataRef | None
     chunk_id: int | None = None
     is_done: bool = False
     error: str | None = None

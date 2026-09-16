@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Typed references to data-plane buffers carried by control messages."""
+
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import Enum
 from typing import Any, TypeVar
 
@@ -159,7 +161,7 @@ class DataRef(msgspec.Struct, frozen=True):
         return value
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "DataRef":
+    def from_dict(cls, value: Mapping[str, object]) -> "DataRef":
         if _required(value, "_type", str) != "DataRef":
             raise ValueError("data_ref must have _type='DataRef'")
         version = _required(value, "version", int)
@@ -190,25 +192,27 @@ class DataRef(msgspec.Struct, frozen=True):
         )
 
 
-def _required(value: dict[str, Any], key: str, expected: type[_Value]) -> _Value:
+def _required(value: Mapping[str, object], key: str, expected: type[_Value]) -> _Value:
     item = value[key]
     if type(item) is not expected:
         raise TypeError(f"{key} must be {expected.__name__}, got {type(item).__name__}")
     return item
 
 
-def _optional(value: dict[str, Any], key: str, expected: type[_Value]) -> _Value | None:
+def _optional(
+    value: Mapping[str, object], key: str, expected: type[_Value]
+) -> _Value | None:
     item = value.get(key)
     if item is None:
         return None
     if type(item) is not expected:
         raise TypeError(
-            f"{key} must be {expected.__name__} or None, " f"got {type(item).__name__}"
+            f"{key} must be {expected.__name__} or None, got {type(item).__name__}"
         )
     return item
 
 
-def _int_tuple(value: dict[str, Any], key: str) -> tuple[int, ...]:
+def _int_tuple(value: Mapping[str, object], key: str) -> tuple[int, ...]:
     items = _required(value, key, list)
     if not all(type(item) is int for item in items):
         raise TypeError(f"{key} must be list[int]")
