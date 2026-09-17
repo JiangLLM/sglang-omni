@@ -27,7 +27,7 @@ from sglang_omni.proto import StagePayload
 from sglang_omni.scheduling.sglang_backend import SGLangARRequestData
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedTokenizerBase, WhisperProcessor, WhisperTokenizer
+    from transformers import WhisperProcessor, WhisperTokenizer
 
     from sglang_omni.models.whisper_asr.encoder_service import (
         WhisperPreLMEncoderService,
@@ -69,7 +69,7 @@ _TIMESTAMP_STEP_S = 0.02
 
 
 def _render_timestamped_text(
-    tokenizer: "PreTrainedTokenizerBase",
+    tokenizer: "WhisperTokenizer",
     output_ids: list[int],
     *,
     timestamp_begin_id: int,
