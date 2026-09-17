@@ -4,10 +4,9 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Iterable
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Callable, Protocol
+from typing import Any, Callable
 
 import torch
 from sglang.srt.managers.schedule_batch import (
@@ -44,19 +43,6 @@ _LANGUAGE_ALIASES = {
     "eng": "english",
     "english": "english",
 }
-
-
-class IndexableTokenIds(Protocol):
-    def __getitem__(self, index: int, /) -> int: ...
-
-
-class PrefixTokenizer(Protocol):
-    def set_prefix_tokens(
-        self, *, language: str, task: str, predict_timestamps: bool
-    ) -> object: ...
-
-    @property
-    def prefix_tokens(self) -> Iterable[int] | IndexableTokenIds: ...
 
 
 @dataclass
@@ -111,7 +97,7 @@ def _build_logit_bias(generation_config: GenerationConfig) -> dict[str, float] |
 
 
 def _build_prefix_tokens(
-    tokenizer: PrefixTokenizer,
+    tokenizer: Any,
     *,
     language: str,
     task: str,

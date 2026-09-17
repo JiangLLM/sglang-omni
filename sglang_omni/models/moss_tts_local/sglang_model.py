@@ -44,7 +44,7 @@ from sglang_omni.models.moss_tts_local.state_pool import MossTTSLocalDecodeState
 logger = logging.getLogger(__name__)
 
 
-def _as_qwen3_config(config: object) -> object:
+def _as_qwen3_config(config: Any) -> Any:
     from transformers import Qwen3Config
 
     if isinstance(config, Qwen3Config):
@@ -158,7 +158,7 @@ class MossTTSLocalSGLangModel(torch.nn.Module):
         return self._state_pool.row_for(rid)
 
     @staticmethod
-    def _cfg_get(config: object, name: str, default: object) -> object:
+    def _cfg_get(config: Any, name: str, default: Any) -> Any:
         if isinstance(config, dict):
             value = config.get(name, default)
         else:

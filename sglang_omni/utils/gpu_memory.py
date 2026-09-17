@@ -329,7 +329,7 @@ def _decode_nvml_string(value: str | bytes) -> str:
     return value
 
 
-def _shutdown_nvml(pynvml: object) -> None:
+def _shutdown_nvml(pynvml: Any) -> None:
     try:
         pynvml.nvmlShutdown()
     except Exception:

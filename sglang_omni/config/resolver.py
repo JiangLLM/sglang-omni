@@ -16,10 +16,9 @@ What it deliberately does *not* do:
 
 from __future__ import annotations
 
-from collections.abc import Hashable
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, TypeGuard, TypeVar
+from typing import Any, TypeVar
 
 from sglang_omni.config.patch import ConfigPatch, ConfigPatchSet
 from sglang_omni.config.path import ConfigPath, ConfigPathError
@@ -162,7 +161,7 @@ def _as_dump(value: PipelineConfig | dict[str, ValueT]) -> dict[str, Any]:
     return value.model_dump() if isinstance(value, PipelineConfig) else value
 
 
-def _diff(expected: object, actual: object, prefix: str) -> list[ConfigDifference]:
+def _diff(expected: Any, actual: Any, prefix: str) -> list[ConfigDifference]:
     if isinstance(expected, dict) and isinstance(actual, dict):
         out: list[ConfigDifference] = []
         for key in sorted(set(expected) | set(actual)):
@@ -194,7 +193,7 @@ def _diff(expected: object, actual: object, prefix: str) -> list[ConfigDifferenc
     return []
 
 
-def _is_named_list(value: object) -> TypeGuard[list[dict[Hashable, object]]]:
+def _is_named_list(value: Any) -> bool:
     return (
         isinstance(value, list)
         and bool(value)

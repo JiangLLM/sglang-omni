@@ -41,11 +41,7 @@ if TYPE_CHECKING:
 
     ReferenceEncoder = _BatchedReferenceEncoder | _MossTTSReferenceEncoder
 
-ParamsT = TypeVar("ParamsT")
-TTSParamsT = TypeVar("TTSParamsT")
-ReferenceT = TypeVar("ReferenceT")
 RefAudioT = TypeVar("RefAudioT")
-GenerationValueT = TypeVar("GenerationValueT")
 
 MOSS_TTS_DEFAULT_MAX_NEW_TOKENS = 4096
 _MOSS_TTS_PREPARED_MARKER = "_moss_tts_prepared_request"
@@ -227,9 +223,9 @@ def normalize_moss_tts_inputs(inputs: object) -> tuple[str, list[dict[str, Any]]
 
 
 def resolve_moss_reference(
-    references: list[dict[str, ReferenceT]],
-    tts_params: dict[str, TTSParamsT],
-) -> tuple[ReferenceT | TTSParamsT | str | None, str | None]:
+    references: list[dict[str, Any]],
+    tts_params: dict[str, Any],
+) -> tuple[Any | None, str | None]:
     reference = references[0] if references else {}
     ref_audio = (
         reference.get("audio_path")
@@ -251,8 +247,8 @@ def _resolve_optional_text(value: object) -> str | None:
 
 def _resolve_token_count(
     text: str,
-    params: dict[str, ParamsT],
-    tts_params: dict[str, TTSParamsT],
+    params: dict[str, Any],
+    tts_params: dict[str, Any],
 ) -> tuple[str, int | None]:
     """Resolve the duration token count and return ``(clean_text, count)``.
 
@@ -317,9 +313,9 @@ def build_moss_tts_state(payload: StagePayload) -> MossTTSState:
 
 
 def build_generation_kwargs(
-    params: dict[str, ParamsT],
+    params: dict[str, Any],
     *,
-    tts_params: dict[str, TTSParamsT],
+    tts_params: dict[str, Any],
 ) -> dict[str, int | float]:
     explicit_generation_params = tts_params.get("explicit_generation_params")
     if isinstance(explicit_generation_params, (list, tuple, set)):
@@ -394,7 +390,7 @@ def build_generation_kwargs(
     return generation_kwargs
 
 
-def _validate_moss_tts_generation_kwargs(kwargs: dict[str, GenerationValueT]) -> None:
+def _validate_moss_tts_generation_kwargs(kwargs: dict[str, Any]) -> None:
     """Validate public sampling fields (MOSS uses a custom sampler that bypasses
     SGLang's SamplingParams.verify), raising ValueError on out-of-range values."""
     if int(kwargs["max_new_tokens"]) <= 0:

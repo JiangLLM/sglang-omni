@@ -164,7 +164,7 @@ def _cuda_runtime_version() -> str | None:
 
 
 def _nvml_inventory(
-    pynvml: object,
+    pynvml: Any | None,
 ) -> tuple[list[dict[str, int | str | None]], dict[str, str | None], list[str]]:
     system: dict[str, str | None] = {
         "driver_version": None,
@@ -342,7 +342,7 @@ def collect_gpu_diagnostics(
     *,
     env: Mapping[str, str] | None = None,
     torch_module: Any | None = None,
-    pynvml_module: object = None,
+    pynvml_module: Any | None = None,
 ) -> dict[str, Any]:
     """Collect diagnostics without loading model configuration or weights."""
 

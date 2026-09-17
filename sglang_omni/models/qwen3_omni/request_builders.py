@@ -392,10 +392,10 @@ def _copy_mutable_containers(value: object) -> Any:
 
 
 def _select_encoder_inputs(
-    encoder_inputs: dict[str, dict[str, ValueT]],
+    encoder_inputs: dict[str, dict[str, Any]],
     *,
     stage_name: str,
-) -> dict[str, dict[str, ValueT]]:
+) -> dict[str, dict[str, Any]]:
     stage_inputs = encoder_inputs.get(stage_name)
     if not isinstance(stage_inputs, dict):
         return {}
@@ -403,13 +403,13 @@ def _select_encoder_inputs(
 
 
 def _project_encoder_input_metadata(
-    encoder_inputs: dict[str, dict[str, ValueT]],
-) -> dict[str, dict[str, ValueT | bool]]:
-    projected: dict[str, dict[str, ValueT | bool]] = {}
+    encoder_inputs: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    projected: dict[str, dict[str, Any]] = {}
     for stage_name, stage_inputs in encoder_inputs.items():
         if not isinstance(stage_inputs, dict):
             continue
-        stage_metadata: dict[str, ValueT | bool] = {}
+        stage_metadata: dict[str, Any] = {}
         cache_key = stage_inputs.get("cache_key")
         if cache_key is not None:
             stage_metadata["cache_key"] = cache_key

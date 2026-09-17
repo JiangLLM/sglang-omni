@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -42,9 +42,6 @@ if TYPE_CHECKING:
     )
 
     ReferenceEncoder = _BatchedReferenceEncoder | _MossLocalReferenceEncoder
-
-ParamsT = TypeVar("ParamsT")
-TTSParamsT = TypeVar("TTSParamsT")
 
 _MOSS_TTS_LOCAL_PREPARED_MARKER = "_moss_tts_local_prepared_request"
 _MOSS_TTS_LOCAL_AUDIO_FRAME_RATE = 12.5
@@ -180,9 +177,9 @@ def build_moss_tts_local_state(payload: StagePayload) -> MossTTSLocalState:
 
 
 def build_generation_kwargs(
-    params: dict[str, ParamsT],
+    params: dict[str, Any],
     *,
-    tts_params: dict[str, TTSParamsT],
+    tts_params: dict[str, Any],
 ) -> dict[str, int | float]:
     explicit_generation_params = tts_params.get("explicit_generation_params")
     if isinstance(explicit_generation_params, (list, tuple, set)):

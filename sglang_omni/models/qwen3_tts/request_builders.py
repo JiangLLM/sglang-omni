@@ -56,7 +56,6 @@ if TYPE_CHECKING:
     PromptModel = Qwen3TTSTalker | Qwen3TTSPromptFrontend
 
 RefCodeT = TypeVar("RefCodeT")
-ReferenceValueT = TypeVar("ReferenceValueT")
 ParamValueT = TypeVar("ParamValueT")
 TTSParamValueT = TypeVar("TTSParamValueT")
 
@@ -493,7 +492,7 @@ def resolve_voice_clone_reference(
 
 
 def has_voice_clone_reference(
-    references: list[dict[str, ReferenceValueT]],
+    references: list[dict[str, Any]],
     tts_params: dict[str, TTSParamValueT],
 ) -> bool:
     if references_contain_audio(references) or references_contain_text(references):
@@ -504,7 +503,7 @@ def has_voice_clone_reference(
     )
 
 
-def references_contain_audio(references: list[dict[str, ReferenceValueT]]) -> bool:
+def references_contain_audio(references: list[dict[str, Any]]) -> bool:
     return any(
         reference.get(key) is not None
         for reference in references
@@ -512,7 +511,7 @@ def references_contain_audio(references: list[dict[str, ReferenceValueT]]) -> bo
     )
 
 
-def references_contain_text(references: list[dict[str, ReferenceValueT]]) -> bool:
+def references_contain_text(references: list[dict[str, Any]]) -> bool:
     return any(reference.get("text") is not None for reference in references)
 
 
