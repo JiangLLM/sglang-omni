@@ -11,7 +11,7 @@ import math
 from collections.abc import AsyncIterator, Collection
 from contextlib import aclosing
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
@@ -148,10 +148,10 @@ def build_speech_to_text_generate_request(
     segment_timestamps: bool = False,
 ) -> GenerateRequest:
     """Keep endpoint policy out of model-neutral request construction."""
-    params: dict[str, Any] = {"task": task}
+    params: dict[str, str | bool] = {"task": task}
     if detect_language:
         params["detect_language"] = True
-    metadata: dict[str, Any] = {"task": "asr"}
+    metadata: dict[str, str | list[str]] = {"task": "asr"}
     explicit_fields: list[str] = []
     if language is not None:
         params["language"] = language
