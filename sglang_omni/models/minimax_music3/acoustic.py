@@ -59,13 +59,13 @@ def resample_waveform(waveform: Tensor) -> Tensor:
     return AF.resample(waveform.float(), DAV_SAMPLE_RATE, OUTPUT_SAMPLE_RATE)
 
 
-def _positive_int(name: str, value: Any) -> int:
+def _positive_int(name: str, value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise ValueError(f"MiniMax Music 3 {name} must be a positive integer")
     return value
 
 
-def _non_negative_number(name: str, value: Any) -> float:
+def _non_negative_number(name: str, value: object) -> float:
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
@@ -76,7 +76,7 @@ def _non_negative_number(name: str, value: Any) -> float:
     return float(value)
 
 
-def _boolean(name: str, value: Any) -> bool:
+def _boolean(name: str, value: object) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"MiniMax Music 3 {name} must be a boolean")
     return value
