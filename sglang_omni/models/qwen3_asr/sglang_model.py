@@ -19,7 +19,7 @@ from sglang.srt.managers.schedule_batch import (
 )
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 from sglang.srt.model_loader.weight_utils import default_weight_loader
-from sglang.srt.models.qwen3 import Qwen3ForCausalLM
+from sglang.srt.models.qwen3 import Qwen3Attention, Qwen3ForCausalLM
 from sglang.srt.models.qwen3_omni_moe import Qwen3OmniMoeAudioEncoder
 from sglang.srt.utils import add_prefix
 
@@ -59,7 +59,7 @@ def _normalize_asr_text_rope(text_config: Any) -> None:
 
 
 def _fused_asr_forward_prepare_native(
-    attention: Any,
+    attention: Qwen3Attention,
     positions: torch.Tensor,
     hidden_states: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
