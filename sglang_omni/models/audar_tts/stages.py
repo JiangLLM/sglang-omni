@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -47,12 +47,12 @@ MAX_REFERENCE_SECONDS = 15.0
 @dataclass(frozen=True)
 class _ReferenceInput:
     source_kind: str
-    source: Any
+    source: str | bytes
     media_type: str | None = None
 
 
 @lru_cache(maxsize=None)
-def _load_codec(model: str, revision: str, device: str) -> NeuCodec:
+def _load_codec(model: str, revision: str, device: str) -> "NeuCodec":
     try:
         from neucodec import NeuCodec
     except ImportError as exc:
@@ -113,7 +113,9 @@ def _load_reference_waveform(item: _ReferenceInput) -> torch.Tensor:
     return torch.from_numpy(audio).float().reshape(1, 1, -1)
 
 
-def _encode_reference(codec: Any, device: str, item: _ReferenceInput) -> torch.Tensor:
+def _encode_reference(
+    codec: "NeuCodec", device: str, item: _ReferenceInput
+) -> torch.Tensor:
     waveform = _load_reference_waveform(item).to(device)
     with torch.inference_mode():
         codes = torch.as_tensor(codec.encode_code(waveform)).squeeze()
@@ -133,7 +135,7 @@ class _AudarReferenceEncodeHook(TensorReferenceEncodeHook[_ReferenceInput]):
     def __init__(
         self,
         *,
-        codec: Any,
+        codec: "NeuCodec",
         device: str,
         codec_model: str,
         codec_revision: str,
