@@ -19,7 +19,7 @@ from sglang_omni.scheduling.generation_batch_policy import (
 )
 
 if TYPE_CHECKING:
-    from transformers import GenerationConfig, PreTrainedTokenizerBase, WhisperProcessor
+    from transformers import GenerationConfig, WhisperProcessor, WhisperTokenizer
 
     from sglang_omni.models.whisper_asr.request_builders import WhisperASRRequestData
     from sglang_omni.models.whisper_asr.sglang_model import (
@@ -216,7 +216,7 @@ class WhisperASREngineBuilder(AsrEngineBuilder):
         self.pre_lm_max_batch_wait_ms = int(pre_lm_max_batch_wait_ms)
         self.pre_lm_cache_pin_host_memory = bool(pre_lm_cache_pin_host_memory)
         self.processor: WhisperProcessor | None = None
-        self.tokenizer: PreTrainedTokenizerBase | None = None
+        self.tokenizer: "WhisperTokenizer | None" = None
         self.generation_config: GenerationConfig | None = None
         self.encoder_token_count = 0
         self.context_length = 0
