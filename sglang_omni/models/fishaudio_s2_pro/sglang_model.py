@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Iterable, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Iterable, Optional, Tuple
 
 import torch
 from sglang.srt.layers.logits_processor import LogitsProcessorOutput
@@ -25,6 +25,9 @@ from sglang_omni.vendor.sglang.layers import (
 )
 from sglang_omni.vendor.sglang.models import apply_qk_norm
 from sglang_omni.vendor.sglang.utils import make_layers
+
+if TYPE_CHECKING:
+    from sglang.srt.layers.quantization.base_config import QuantizationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +177,7 @@ class S2ProSGLangTextModel(nn.Module):
     def __init__(
         self,
         config: Any = None,
-        quant_config: Any = None,
+        quant_config: "QuantizationConfig | None" = None,
         vocab_size: int = 155776,
         hidden_size: int = 2560,
         intermediate_size: int = 9728,
