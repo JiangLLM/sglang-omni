@@ -6,9 +6,10 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, TypedDict
+from typing import TypedDict
 
 import torch
+from transformers import MimiModel
 from transformers.models.mimi.modeling_mimi import MimiConv1d
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ class Qwen3TTSReferenceEncoderCudaGraphRunner:
 
     def __init__(
         self,
-        encoder: Any,
+        encoder: MimiModel,
         *,
         hop: int,
         num_quantizers: int,
