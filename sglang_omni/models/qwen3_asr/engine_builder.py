@@ -32,8 +32,7 @@ if TYPE_CHECKING:
     from sglang.srt.hardware_backend.mlx.model_runner_stub import _DummyModel
     from sglang.srt.hardware_backend.mlx.tp_worker import MlxTpModelWorker
     from sglang.srt.server_args import ServerArgs
-    from transformers import PreTrainedTokenizerBase
-    from transformers.feature_extraction_utils import FeatureExtractionMixin
+    from transformers import PreTrainedTokenizerBase, WhisperFeatureExtractor
 
     from sglang_omni.model_runner.base import ModelRunner
     from sglang_omni.model_runner.model_worker import ModelWorker
@@ -126,7 +125,7 @@ class Qwen3ASREngineBuilder(AsrEngineBuilder):
         self.enable_encoder_cuda_graph = enable_encoder_cuda_graph
         self.max_audio_clip_s = max_audio_clip_s
         self.tokenizer: PreTrainedTokenizerBase | None = None
-        self.feature_extractor: FeatureExtractionMixin | None = None
+        self.feature_extractor: "WhisperFeatureExtractor | None" = None
         self.context_length = 0
         self.device: str | None = None
         self.model_path: str | None = None
