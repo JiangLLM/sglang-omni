@@ -119,7 +119,7 @@ def reconstruct_timelines(
 ) -> dict[str, RequestTimeline]:
     """Group every event by ``request_id`` into a per-request timeline."""
     events = load_events(source)
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[str, list[dict[str, JsonValue]]] = defaultdict(list)
     for ev in events:
         rid = ev.get("request_id")
         if not rid:
