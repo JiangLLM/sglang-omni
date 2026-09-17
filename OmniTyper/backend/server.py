@@ -93,6 +93,7 @@ class NativeASRServer:
                 model_path,
                 "--model-name",
                 SERVED_MODEL,
+                "--enable-realtime",
                 "--asr.engine.max_running_requests",
                 "1",
                 "--audio_chunking.max_total_audio_s",

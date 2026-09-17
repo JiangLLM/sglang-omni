@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Exercise the real worker, native MLX speech server, and local text model.
+"""Exercise the real worker, native MLX speech server, and a configured text API.
 
 Run with the prepared environment: python backend/smoke.py [--audio /path.wav]
 Without --audio, macOS's built-in Samantha voice creates a known test phrase.
@@ -9,6 +9,7 @@ The first run downloads model snapshots. Output contains timings and results.
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,7 +19,20 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--audio", type=Path)
+    parser.add_argument("--base-url", default="http://127.0.0.1:11434/v1")
+    parser.add_argument(
+        "--model", required=True, help="Model name exposed by your text API"
+    )
+    parser.add_argument(
+        "--options", default="{}", help="Additional chat-completion JSON fields"
+    )
     args = parser.parse_args()
+    api = {
+        "text_api_url": args.base_url,
+        "text_model": args.model,
+        "text_api_key": os.environ.get("OMNITYPER_API_KEY", ""),
+        "text_api_options": json.loads(args.options),
+    }
     with tempfile.TemporaryDirectory(prefix="omnityper-smoke-") as directory:
         audio = args.audio
         if audio is None:
@@ -96,6 +110,7 @@ def main():
                 },
             ]
             for request in cases:
+                request.update(api)
                 process.stdin.write(json.dumps(request) + "\n")
                 process.stdin.flush()
                 while True:

@@ -63,7 +63,7 @@ final class WorkerClient: ObservableObject {
                     try ensureProcess(python: python)
                     guard let input else { throw WorkerError.unavailable("The local worker has no input connection.") }
                     pending = Pending(id: requestID, continuation: continuation)
-                    status = payload["op"] as? String == "prepare" ? "Preparing local models…" : "Processing locally…"
+                    status = payload["op"] as? String == "prepare" ? "Preparing speech model…" : "Processing…"
                     let workerGeneration = generation
                     let seconds: UInt64 = payload["op"] as? String == "prepare" ? 1_800 : 600
                     timeoutTask = Task { [weak self] in

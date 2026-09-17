@@ -23,10 +23,46 @@ enum VoiceMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+struct TextAPISettings: Codable, Equatable {
+    var baseURL = "http://127.0.0.1:11434/v1"
+    var model = ""
+    var optionsJSON = "{}"
+
+    func payload(apiKey: String, requireModel: Bool = true) throws -> [String: Any] {
+        let url = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard url.unicodeScalars.count <= 2048,
+              !url.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.union(.controlCharacters).contains($0) }),
+              let components = URLComponents(string: url), ["http", "https"].contains(components.scheme ?? ""),
+              let host = components.host, !host.isEmpty,
+              components.user == nil, components.password == nil, components.query == nil, components.fragment == nil,
+              components.port == nil || (1...65535).contains(components.port!) else {
+            throw AppError.message("Enter an HTTP(S) API base URL without credentials, query, or fragment, such as http://127.0.0.1:11434/v1.")
+        }
+        guard model.unicodeScalars.count <= 256, !model.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
+              !requireModel || !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AppError.message("Choose a text model in Settings → Text API, or use verbatim dictation for ASR only.")
+        }
+        guard apiKey.utf8.count <= 4096, apiKey.unicodeScalars.allSatisfy({ (33...126).contains($0.value) }) else {
+            throw AppError.message("Enter an API key without spaces or control characters.")
+        }
+        guard let data = optionsJSON.data(using: .utf8), data.count <= 8192,
+              let options = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              Set(options.keys).isDisjoint(with: ["model", "messages", "stream"]) else {
+            throw AppError.message("Request options must be a JSON object under 8 KiB, without model, messages, or stream.")
+        }
+        return ["text_api_url": url, "text_model": model, "text_api_key": apiKey, "text_api_options": options]
+    }
+}
+
 struct Preferences: Codable, Equatable {
     var pythonExecutable = ""
     var asrModel = "mlx-community/Qwen3-ASR-0.6B-4bit"
-    var textModel = "mlx-community/Qwen3-1.7B-4bit"
+    // Optional so libraries saved before API configuration continue to decode.
+    var textAPI: TextAPISettings?
+    var textSettings: TextAPISettings {
+        get { textAPI ?? TextAPISettings() }
+        set { textAPI = newValue }
+    }
     var language = ""
     var targetLanguage = "English"
     var style = "clean"

@@ -4,6 +4,37 @@ import Foundation
 @testable import OmniTyper
 
 struct StoreTests {
+    @Test @MainActor func textAPIConfigurationKeepsOldLibrariesAndKeysPrivate() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var old = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(Preferences())) as? [String: Any])
+        old.removeValue(forKey: "textAPI")
+        old["textModel"] = "mlx-community/Qwen3-1.7B-4bit"
+        let restored = try JSONDecoder().decode(Preferences.self, from: JSONSerialization.data(withJSONObject: old))
+        #expect(restored.textSettings.baseURL == "http://127.0.0.1:11434/v1")
+        #expect(restored.textSettings.model.isEmpty)
+        var settings = TextAPISettings(model: "my-ollama-model", optionsJSON: "{\"temperature\":0.3}")
+        let payload = try settings.payload(apiKey: "secret")
+        #expect(payload["text_model"] as? String == "my-ollama-model")
+        #expect(payload["text_api_key"] as? String == "secret")
+        settings.optionsJSON = "{\"messages\":[]}"
+        #expect(throws: (any Error).self) { try settings.payload(apiKey: "") }
+        settings.optionsJSON = "{}"
+        settings.baseURL = "http://user:secret@localhost/v1"
+        #expect(throws: (any Error).self) { try settings.payload(apiKey: "") }
+
+        let store = AppStore(directory: root)
+        let model = AppModel(store: store)
+        defer { model.shutdown() }
+        model.textAPIKey = "session-secret"
+        store.preferences.textSettings.model = "my-ollama-model"
+        #expect(model.textAPIKey == "session-secret")
+        #expect(!String(decoding: try Data(contentsOf: root.appendingPathComponent("library.json")), as: UTF8.self).contains("session-secret"))
+        store.preferences.textSettings.baseURL = "https://example.com/v1"
+        #expect(model.textAPIKey.isEmpty)
+        #expect(AppStore(directory: root).preferences.textSettings.model == "my-ollama-model")
+    }
+
     @Test @MainActor func renamedAppMigratesLibraryAndRuntimeWithoutOverwritingNewData() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -155,6 +186,7 @@ struct StoreTests {
         let originalPython = directory.appendingPathComponent("missing-original-python").path
         let correctedPython = directory.appendingPathComponent("missing-corrected-python").path
         store.preferences.pythonExecutable = originalPython
+        store.preferences.textSettings.model = "test-model"
         let audio = directory.appendingPathComponent("recording.wav")
         try Data([1, 2, 3]).write(to: audio)
         store.add(HistoryEntry(mode: .dictate, appName: "Original app", rawText: "hello", text: "Hello.", duration: 42), recording: audio)

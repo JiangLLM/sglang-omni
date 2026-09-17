@@ -37,7 +37,7 @@ struct RootView: View {
                 HStack {
                     Text(page.rawValue).font(.system(size: 14, weight: .semibold))
                     Spacer()
-                    Label("ON YOUR MAC", systemImage: "lock.shield")
+                    Label("ASR ON YOUR MAC", systemImage: "lock.shield")
                         .font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundStyle(accent)
                     Circle().fill(accent).frame(width: 6, height: 6)
                 }.padding(.horizontal, 32).frame(height: 60)
@@ -98,7 +98,7 @@ struct RootView: View {
             Spacer()
             VStack(alignment: .leading, spacing: 12) {
                 Label("Your voice. Your device.", systemImage: "desktopcomputer").font(.system(size: 11, weight: .medium))
-                Text("Open source. Local models.\nNo account or subscription.")
+                Text("Local speech recognition.\nYour choice of text API.")
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(4)
                 HStack {
                     Text("SGLang-Omni + MLX").font(.system(size: 9, weight: .medium, design: .monospaced))
@@ -165,7 +165,7 @@ struct HomeView: View {
                     }.pickerStyle(.segmented).labelsHidden().disabled(model.isBusy)
                     HStack(spacing: 12) {
                         Button { model.toggle() } label: {
-                            Label(model.phase == .recording ? "Finish recording" : model.phase == .processing ? "Working…" : "Start speaking",
+                            Label(model.phase == .recording ? "Finish recording" : model.phase == .processing ? "Working…" : model.phase == .starting ? "Loading speech…" : "Start speaking",
                                   systemImage: model.phase == .recording ? "stop.fill" : "mic.fill")
                                 .frame(minWidth: 142).padding(.vertical, 6)
                         }.buttonStyle(.borderedProminent).controlSize(.large)
@@ -186,8 +186,18 @@ struct HomeView: View {
                         }.font(.system(size: 12))
                     }
                     if model.mode == .ask {
-                        Text("Answers come from your local model. Web browsing is not connected.").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text("Answers come from your configured text API. OmniTyper does not provide web browsing tools.").font(.system(size: 11)).foregroundStyle(.secondary)
                     }
+                }
+            }
+            if model.phase == .starting || model.phase == .recording || model.phase == .processing {
+                Card {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Live transcript", systemImage: "waveform").font(.system(size: 13, weight: .semibold))
+                        Text(model.liveStatus).font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text(model.liveText.isEmpty ? "Your words will appear here while you speak." : model.liveText)
+                            .font(.system(size: 15)).lineSpacing(4).textSelection(.enabled)
+                    }.frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             if !model.resultText.isEmpty {
@@ -245,7 +255,7 @@ private struct PreparationCard: View {
         HStack(spacing: 14) {
             ProgressView().controlSize(.small)
             VStack(alignment: .leading, spacing: 5) {
-                Text("Preparing your local models").font(.system(size: 13, weight: .semibold))
+                Text("Connecting your models").font(.system(size: 13, weight: .semibold))
                 Text(worker.status.isEmpty ? "The first download can take several minutes." : worker.status).font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Spacer(); Button("Cancel") { model.cancel() }
@@ -258,25 +268,34 @@ struct VoicePanel: View {
     @ObservedObject var recorder: AudioRecorder
     @ObservedObject var worker: WorkerClient
     var body: some View {
-        HStack(spacing: 14) {
-            if model.phase == .recording {
-                HStack(alignment: .center, spacing: 3) {
-                    ForEach(0..<9) { index in
-                        Capsule().fill(accent).frame(width: 3, height: 5 + 30 * recorder.level * (index % 2 == 0 ? 1 : 0.55))
-                    }
-                }.frame(width: 55, height: 38).animation(.easeOut(duration: 0.1), value: recorder.level)
-            } else { ProgressView().controlSize(.small).frame(width: 55) }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(model.phase == .recording ? "Listening · \(model.mode.title)" : "Making it yours…").font(.system(size: 12, weight: .semibold))
-                Text(model.phase == .recording ? String(format: "%d:%02d · Esc to cancel", Int(recorder.elapsed) / 60, Int(recorder.elapsed) % 60) : worker.status)
-                    .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 14) {
+                if model.phase == .recording {
+                    HStack(alignment: .center, spacing: 3) {
+                        ForEach(0..<9) { index in
+                            Capsule().fill(accent).frame(width: 3, height: 5 + 30 * recorder.level * (index % 2 == 0 ? 1 : 0.55))
+                        }
+                    }.frame(width: 45, height: 38).animation(.easeOut(duration: 0.1), value: recorder.level)
+                } else { ProgressView().controlSize(.small).frame(width: 45) }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.phase == .recording ? "Listening · \(model.mode.title)" : model.phase == .starting ? "Loading speech model…" : model.liveStatus)
+                        .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text(model.phase == .recording ? String(format: "%d:%02d · Esc to cancel", Int(recorder.elapsed) / 60, Int(recorder.elapsed) % 60) : worker.status)
+                        .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if model.phase == .recording {
+                    Button { model.finish() } label: { Image(systemName: "stop.fill").foregroundStyle(accent) }.buttonStyle(.plain).accessibilityLabel("Finish recording")
+                }
+                Button { model.cancel() } label: { Image(systemName: "xmark").foregroundStyle(.secondary) }.buttonStyle(.plain).accessibilityLabel("Cancel recording")
             }
-            Spacer(minLength: 0)
-            if model.phase == .recording {
-                Button { model.finish() } label: { Image(systemName: "stop.fill").foregroundStyle(accent) }.buttonStyle(.plain).accessibilityLabel("Finish recording")
-            }
-            Button { model.cancel() } label: { Image(systemName: "xmark").foregroundStyle(.secondary) }.buttonStyle(.plain).accessibilityLabel("Cancel recording")
-        }.padding(.horizontal, 18).frame(width: 350, height: 72).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+            Divider()
+            Text(model.liveText.isEmpty ? (model.phase == .starting ? "Wait for Listening before speaking." : "Your words will appear here…") : String(model.liveText.suffix(600)))
+                .font(.system(size: 14)).lineSpacing(3).lineLimit(3).truncationMode(.head)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Text(model.phase == .recording ? model.liveStatus : "Text is inserted only after you finish.")
+                .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+        }.padding(18).frame(width: 460, height: 190).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.2), lineWidth: 1))
     }
 }
@@ -539,23 +558,52 @@ struct PreferencesView: View {
                         ForEach(languages, id: \.self) { Text($0).tag($0) }
                     }
                     Picker("Translate into", selection: $store.preferences.targetLanguage) { ForEach(languages, id: \.self) { Text($0).tag($0) } }
-                    Text("Recognition coverage follows Qwen3-ASR. Translation quality depends on the local text model.").font(.caption).foregroundStyle(.secondary)
+                    Text("Recognition coverage follows Qwen3-ASR. Translation quality depends on your text API model.").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Card {
                 VStack(alignment: .leading, spacing: 15) {
-                    Label("Local models", systemImage: "cpu").font(.headline)
+                    Label("Local speech model", systemImage: "cpu").font(.headline)
                     Text("Qwen3-ASR · 0.6B · MLX 4-bit").font(.subheadline)
-                    Text("SGLang-Omni performs recognition on Apple Silicon. Qwen3 1.7B prepares your text, translations, and answers.").font(.caption).foregroundStyle(.secondary)
+                    Text("SGLang-Omni performs speech recognition on Apple Silicon. Text processing is configured separately below.").font(.caption).foregroundStyle(.secondary)
                     HStack {
-                        Button("Download & prepare models") { model.prepareModels() }.buttonStyle(.borderedProminent).disabled(model.isBusy)
-                        Button("Unload models") { model.releaseModels() }.disabled(model.isBusy)
+                        Button("Download & prepare ASR") { model.prepareModels() }.buttonStyle(.borderedProminent).disabled(model.isBusy)
+                        Button("Unload ASR") { model.releaseModels() }.disabled(model.isBusy)
                     }
                     DisclosureGroup("Runtime location") {
                         TextField("Python executable", text: $store.preferences.pythonExecutable).textFieldStyle(.roundedBorder).padding(.top, 8)
                         Text("Set up the runtime with OmniTyper/scripts/setup.sh before preparing models.").font(.caption).foregroundStyle(.secondary)
                     }
-                    Text("First use downloads model weights from Hugging Face. Audio and text inference stay local; no telemetry is collected.").font(.caption).foregroundStyle(.secondary)
+                    Text("First use downloads ASR weights from Hugging Face. Audio stays on this Mac; no telemetry is collected.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Card {
+                VStack(alignment: .leading, spacing: 15) {
+                    Label("Text API", systemImage: "network").font(.headline)
+                    Text("Connect Ollama or another OpenAI-compatible server for cleanup, translation, editing, and answers.").font(.caption).foregroundStyle(.secondary)
+                    TextField("Base URL (including /v1)", text: $store.preferences.textSettings.baseURL)
+                        .textFieldStyle(.roundedBorder).accessibilityLabel("Text API base URL")
+                    HStack {
+                        TextField("Model name from your server", text: $store.preferences.textSettings.model)
+                            .textFieldStyle(.roundedBorder).accessibilityLabel("Text API model")
+                        if !model.textModels.isEmpty {
+                            Menu("Choose model") {
+                                ForEach(model.textModels, id: \.self) { name in
+                                    Button(name) { store.preferences.textSettings.model = name }
+                                }
+                            }
+                        }
+                    }
+                    SecureField("API key (optional, this session only)", text: $model.textAPIKey).textFieldStyle(.roundedBorder)
+                    Text("Local Ollama normally needs no key. Keys are cleared when the address changes or the app quits.").font(.caption).foregroundStyle(.secondary)
+                    Button("Connect & load models") { model.loadTextModels() }.disabled(model.isBusy)
+                    DisclosureGroup("Request options (JSON)") {
+                        TextEditor(text: $store.preferences.textSettings.optionsJSON)
+                            .font(.system(.caption, design: .monospaced)).frame(height: 90)
+                            .accessibilityLabel("Text API request options JSON")
+                        Text("Leave {} to use server defaults. Optional fields such as temperature and max_tokens are passed through; model, messages, and stream are managed by the app. Configure context size and custom models in Ollama.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("Transcripts, writing preferences, and selected text for Edit/Ask are sent to this endpoint. Choose a local model/server to keep text on your Mac; cloud routing is controlled by your provider. Verbatim dictation skips this API.").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Card {

@@ -15,9 +15,15 @@ final class AppModel: ObservableObject {
     @Published var mode: VoiceMode = .dictate
     @Published var resultText = ""
     @Published var rawText = ""
+    @Published var liveText = ""
+    @Published var liveStatus = ""
     @Published var notice = ""
     @Published var error = ""
     @Published var lastApp = ""
+    // ponytail: keys stay in memory for this session; use Keychain if persistence is needed.
+    @Published var textAPIKey = ""
+    @Published var textModels: [String] = []
+    private var sessionAPIKey = ""
     @Published var microphoneAllowed = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     @Published var accessibilityAllowed = false
     var showMainWindow: (() -> Void)?
@@ -25,6 +31,7 @@ final class AppModel: ObservableObject {
     var hideVoicePanel: (() -> Void)?
     private var target: InsertionTarget?
     private var task: Task<Void, Never>?
+    private var speechStream: ASRStream?
     private var generation = UUID()
     private var timer: Timer?
     private var preferencesSubscription: AnyCancellable?
@@ -48,6 +55,10 @@ final class AppModel: ObservableObject {
         }
         refreshPermissions()
         preferencesSubscription = store.$preferences.dropFirst().removeDuplicates().sink { [weak self] preferences in
+            if preferences.textSettings.baseURL != self?.store.preferences.textSettings.baseURL {
+                self?.textAPIKey = ""
+                self?.textModels = []
+            }
             // Published emits before storage changes; use the supplied value for shortcut settings.
             Task { @MainActor in self?.configureShortcut(preferences) }
         }
@@ -105,8 +116,9 @@ final class AppModel: ObservableObject {
     }
 
     private func start() {
-        error = ""; notice = ""; target = nil
+        error = ""; notice = ""; target = nil; liveText = ""; liveStatus = "Loading speech model…"
         sessionPreferences = store.preferences
+        sessionAPIKey = textAPIKey
         do {
             let captured = try TextInsertion.capture()
             if captured.bundleID != Bundle.main.bundleIdentifier { target = captured }
@@ -127,17 +139,38 @@ final class AppModel: ObservableObject {
         do { _ = try payload(audio: nil) }
         catch { self.error = error.localizedDescription; showMainWindow?(); return }
         phase = .starting
+        showVoicePanel?()
         let token = UUID(); generation = token
-        task = Task {
+        task = Task { [self] in
             do {
-                try await recorder.start(deviceUID: sessionPreferences.microphoneUID)
+                let response = try await worker.request(["op": "prepare", "asr_model": sessionPreferences.asrModel],
+                                                        python: sessionPreferences.pythonExecutable)
+                guard generation == token, !Task.isCancelled else { return }
+                do {
+                    let stream = try ASRStream(url: response["realtime_url"] as? String ?? "", onPartial: { [weak self] text in
+                        guard let self, self.generation == token else { return }
+                        self.liveText = text
+                    }, onFailure: { [weak self] in
+                        guard let self, self.generation == token else { return }
+                        self.liveStatus = "Live preview unavailable · recording saved for transcription"
+                    })
+                    speechStream = stream
+                    try await stream.connect(language: sessionPreferences.language)
+                    liveStatus = "Listening · live words may change"
+                } catch {
+                    guard generation == token, !Task.isCancelled else { return }
+                    speechStream?.cancel(); speechStream = nil
+                    liveStatus = "Live preview unavailable · transcription runs when you finish"
+                }
+                try await recorder.start(deviceUID: sessionPreferences.microphoneUID, onPCM: speechStream?.audioInput)
                 guard generation == token, !Task.isCancelled else { recorder.cancel(); return }
                 discardRetryRecording()
                 phase = .recording; showVoicePanel?()
                 if sessionPreferences.sounds { NSSound(named: "Tink")?.play() }
             } catch {
                 guard generation == token else { return }
-                target = nil; phase = .idle; self.error = error.localizedDescription; refreshPermissions(); showMainWindow?()
+                speechStream?.cancel(); speechStream = nil
+                target = nil; phase = .idle; hideVoicePanel?(); self.error = error.localizedDescription; refreshPermissions(); showMainWindow?()
             }
         }
     }
@@ -149,7 +182,10 @@ final class AppModel: ObservableObject {
             let audio = try recorder.stop()
             if sessionPreferences.sounds { NSSound(named: "Pop")?.play() }
             run(audio: audio, duration: duration, allowInsertion: true)
-        } catch { target = nil; phase = .idle; self.error = error.localizedDescription; hideVoicePanel?(); showMainWindow?() }
+        } catch {
+            speechStream?.cancel(); speechStream = nil
+            target = nil; phase = .idle; self.error = error.localizedDescription; hideVoicePanel?(); showMainWindow?()
+        }
     }
 
     private func payload(audio: URL?, text: String? = nil) throws -> [String: Any] {
@@ -165,13 +201,16 @@ final class AppModel: ObservableObject {
         }
         var request: [String: Any] = [
             "op": audio == nil ? "process" : "transcribe",
-            "asr_model": preferences.asrModel, "text_model": preferences.textModel,
+            "asr_model": preferences.asrModel,
             "mode": mode.rawValue, "language": preferences.language,
             "target_language": preferences.targetLanguage, "style": rule?.style ?? preferences.style,
             "instructions": instructions,
             "dictionary": store.dictionary.map { ["spoken": $0.spoken, "written": $0.written] },
             "selected_text": selectedText, "app_name": lastApp
         ]
+        if mode != .dictate || (rule?.style ?? preferences.style) != "verbatim" {
+            request.merge(try preferences.textSettings.payload(apiKey: sessionAPIKey)) { _, new in new }
+        }
         if let audio { request["audio_path"] = audio.path }
         if let text { request["text"] = text }
         return request
@@ -188,11 +227,28 @@ final class AppModel: ObservableObject {
                                         target: capturedTarget, appName: lastApp)
         task = Task {
             do {
-                let response = try await worker.request(request.get(), python: preferences.pythonExecutable)
+                var payload = try request.get()
+                var streamingWarning = ""
+                if let stream = speechStream {
+                    liveStatus = "Finalizing transcript…"
+                    do {
+                        let transcript = try await stream.finish()
+                        payload["op"] = "process"
+                        payload["audio_path"] = nil
+                        payload["text"] = transcript
+                    } catch {
+                        guard generation == token, !Task.isCancelled else { throw CancellationError() }
+                        streamingWarning = "Live transcription was interrupted; recovered from the complete recording."
+                    }
+                    stream.cancel(); speechStream = nil
+                }
+                try Task.checkCancellation()
+                liveStatus = payload["op"] as? String == "process" ? "Processing text…" : "Transcribing recording…"
+                let response = try await worker.request(payload, python: preferences.pythonExecutable)
                 guard generation == token, !Task.isCancelled else { try? FileManager.default.removeItem(at: audio); return }
                 let text = response["text"] as? String ?? ""
                 let raw = response["raw_text"] as? String ?? text
-                let warning = response["warning"] as? String ?? ""
+                let warning = [streamingWarning, response["warning"] as? String ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
                 resultText = text; rawText = raw
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     notice = "No speech detected. Try speaking closer to the microphone."
@@ -224,6 +280,7 @@ final class AppModel: ObservableObject {
                 if !self.error.isEmpty { showMainWindow?() }
             } catch {
                 guard generation == token else { try? FileManager.default.removeItem(at: audio); return }
+                speechStream?.cancel(); speechStream = nil
                 retryRecording = recording
                 target = nil; phase = .idle; hideVoicePanel?()
                 self.error = error.localizedDescription
@@ -242,6 +299,7 @@ final class AppModel: ObservableObject {
         retryRecording = nil
         target = recording.target; mode = recording.mode; lastApp = recording.appName
         sessionPreferences = store.preferences
+        sessionAPIKey = textAPIKey
         run(audio: recording.url, duration: recording.duration, allowInsertion: false)
     }
 
@@ -256,6 +314,7 @@ final class AppModel: ObservableObject {
             try FileManager.default.copyItem(at: audio, to: copy)
             discardRetryRecording()
             target = nil; mode = entry.mode; lastApp = entry.appName; sessionPreferences = store.preferences
+            sessionAPIKey = textAPIKey
             run(audio: copy, duration: entry.duration, allowInsertion: false)
         } catch { self.error = error.localizedDescription }
     }
@@ -267,10 +326,9 @@ final class AppModel: ObservableObject {
         let token = UUID(); generation = token
         task = Task {
             do {
-                _ = try await worker.request(["op": "prepare", "asr_model": preferences.asrModel,
-                                              "text_model": preferences.textModel], python: preferences.pythonExecutable)
+                _ = try await worker.request(["op": "prepare", "asr_model": preferences.asrModel], python: preferences.pythonExecutable)
                 guard generation == token else { return }
-                notice = "Local models are ready. You can start dictating."
+                notice = "Speech model ready. Text processing uses your configured API."
             } catch {
                 guard generation == token else { return }
                 self.error = error.localizedDescription
@@ -279,16 +337,42 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func releaseModels() { if phase == .idle { worker.stop(); notice = "Models unloaded. They will load on your next dictation." } }
+    func loadTextModels() {
+        guard phase == .idle else { return }
+        error = ""; notice = ""
+        do {
+            var request = try store.preferences.textSettings.payload(apiKey: textAPIKey, requireModel: false)
+            request["op"] = "models"
+            let python = store.preferences.pythonExecutable
+            phase = .preparing
+            let token = UUID(); generation = token
+            task = Task {
+                do {
+                    let response = try await worker.request(request, python: python)
+                    guard generation == token else { return }
+                    textModels = response["models"] as? [String] ?? []
+                    notice = textModels.isEmpty ? "Connected, but no models were listed. Add a model in your server, or enter its name manually." : "Connected. Choose a model or enter a custom model name."
+                } catch {
+                    guard generation == token else { return }
+                    self.error = error.localizedDescription
+                }
+                phase = .idle
+            }
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func releaseModels() { if phase == .idle { worker.stop(); notice = "Speech model unloaded. Your text API server is managed separately." } }
 
     func cancel() {
         generation = UUID(); task?.cancel(); task = nil
+        speechStream?.cancel(); speechStream = nil; liveText = ""; liveStatus = ""
         recorder.cancel(); worker.stop(); target = nil; phase = .idle; hideVoicePanel?()
         notice = "Cancelled."
     }
 
     func shutdown() {
         cancel(); shortcut.stop(); timer?.invalidate()
+        textAPIKey = ""; sessionAPIKey = ""
         discardRetryRecording()
     }
 

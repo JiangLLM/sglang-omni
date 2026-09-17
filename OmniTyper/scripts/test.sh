@@ -9,5 +9,5 @@ TESTING_PLUGIN="$(dirname "$SWIFT_BIN")/../lib/swift/host/plugins/testing/libTes
 if [[ -f "$TESTING_PLUGIN" ]]; then
   SWIFT_FLAGS+=(-Xswiftc -load-plugin-library -Xswiftc "$TESTING_PLUGIN")
 fi
-swift test "${SWIFT_FLAGS[@]}"
+OMNITYPER_TEST_PYTHON="$PYTHON_BIN" swift test "${SWIFT_FLAGS[@]}"
 "$PYTHON_BIN" -m unittest discover -s "$APP_ROOT/backend" -p 'test_*.py' -v

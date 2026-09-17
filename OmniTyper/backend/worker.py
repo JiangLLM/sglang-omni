@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import importlib.util
+import ipaddress
 import json
 import os
 import re
@@ -14,6 +15,9 @@ import sys
 import time
 import wave
 from pathlib import Path
+from urllib.parse import urlsplit
+
+import httpx
 
 # Works from the checkout and from Contents/Resources/backend in the app.
 for root in (Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[2]):
@@ -21,7 +25,7 @@ for root in (Path(__file__).resolve().parents[1], Path(__file__).resolve().paren
         sys.path.insert(0, str(root))
         break
 
-from server import DEFAULT_MODEL, NativeASRServer, model_snapshot
+from server import DEFAULT_MODEL, NativeASRServer
 
 import sglang_omni
 
@@ -32,18 +36,20 @@ _language_module = importlib.util.module_from_spec(_language_spec)
 _language_spec.loader.exec_module(_language_module)
 resolve_language = _language_module.resolve_language
 
-TEXT_MODEL = "mlx-community/Qwen3-1.7B-4bit"
-TEXT_REVISION = "3b1b1768f8f8cf8351c712464f906e86c2b8269e"
+DEFAULT_TEXT_API = "http://127.0.0.1:11434/v1"
+MAX_API_BYTES = 1024 * 1024
 MAX_LINE_BYTES = 256 * 1024
 MAX_TEXT = 12000
 MAX_AUDIO_SECONDS = 300
-MAX_TEXT_TOKENS = 4096
 FIELDS = {
     "id",
     "op",
     "audio_path",
     "asr_model",
     "text_model",
+    "text_api_url",
+    "text_api_key",
+    "text_api_options",
     "mode",
     "language",
     "target_language",
@@ -70,6 +76,8 @@ def validate_request(value: object) -> dict:
         "audio_path": 4096,
         "asr_model": 256,
         "text_model": 256,
+        "text_api_url": 2048,
+        "text_api_key": 4096,
         "mode": 16,
         "language": 64,
         "target_language": 64,
@@ -87,11 +95,13 @@ def validate_request(value: object) -> dict:
             )
     if not request.get("id", "").strip():
         raise ValueError("id must be a nonempty string.")
-    if request.get("op") not in {"prepare", "transcribe", "process"}:
-        raise ValueError("op must be prepare, transcribe, or process.")
+    if request.get("op") not in {"prepare", "transcribe", "process", "models"}:
+        raise ValueError("op must be prepare, transcribe, process, or models.")
     defaults = {
         "asr_model": DEFAULT_MODEL,
-        "text_model": TEXT_MODEL,
+        "text_model": "",
+        "text_api_url": DEFAULT_TEXT_API,
+        "text_api_key": "",
         "mode": "dictate",
         "style": "clean",
         "language": "",
@@ -103,8 +113,17 @@ def validate_request(value: object) -> dict:
     }
     for field, default in defaults.items():
         request.setdefault(field, default)
-    if request["asr_model"] != DEFAULT_MODEL or request["text_model"] != TEXT_MODEL:
-        raise ValueError(f"Supported model pair: {DEFAULT_MODEL}, {TEXT_MODEL}.")
+    if request["asr_model"] != DEFAULT_MODEL:
+        raise ValueError(f"Supported ASR model: {DEFAULT_MODEL}.")
+    options = request.setdefault("text_api_options", {})
+    if not isinstance(options, dict) or any(
+        not isinstance(key, str) for key in options
+    ):
+        raise ValueError("Text API options must be a JSON object.")
+    if options.keys() & {"model", "messages", "stream"}:
+        raise ValueError("Text API options cannot override model, messages, or stream.")
+    if len(json.dumps(options, ensure_ascii=False, allow_nan=False).encode()) > 8192:
+        raise ValueError("Text API options exceed 8 KiB.")
     if request["mode"] not in {"dictate", "translate", "edit", "ask"}:
         raise ValueError("Unsupported mode.")
     if request["style"] not in {"clean", "verbatim", "casual", "formal", "concise"}:
@@ -273,8 +292,6 @@ def messages_for(request: dict, text: str) -> list[dict]:
 class Worker:
     def __init__(self):
         self.asr = NativeASRServer()
-        self.text_model = None
-        self.tokenizer = None
 
     def prepare_asr(self, progress):
         self.asr.start(progress)
@@ -282,59 +299,144 @@ class Worker:
     def close(self):
         self.asr.close()
 
-    def prepare_text(self, progress):
-        if self.text_model is None:
-            progress("Loading local text model; first use downloads model files…")
-            from mlx_lm import load
-
-            self.text_model, self.tokenizer = load(
-                model_snapshot(TEXT_MODEL, TEXT_REVISION),
-                tokenizer_config={"trust_remote_code": False},
+    def api_request(self, request, path, body=None):
+        url = request["text_api_url"].rstrip("/")
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or any(ord(c) <= 32 for c in url)
+            or (parsed.port is not None and not 0 < parsed.port <= 65535)
+        ):
+            raise ValueError(
+                "Use an HTTP(S) API base URL without credentials, query, or fragment, e.g. http://127.0.0.1:11434/v1."
             )
+        key = request["text_api_key"]
+        if any(ord(c) < 33 or ord(c) > 126 for c in key):
+            raise ValueError("The API key must contain printable ASCII without spaces.")
+        try:
+            loopback = ipaddress.ip_address(parsed.hostname).is_loopback
+        except ValueError:
+            loopback = parsed.hostname.lower() == "localhost"
+        headers = {"Authorization": "Bearer " + key} if key else {}
+        try:
+            # Never follow redirects with transcripts or credentials. Local calls bypass proxies.
+            with httpx.Client(
+                timeout=httpx.Timeout(180, connect=10),
+                follow_redirects=False,
+                trust_env=not loopback,
+            ) as client:
+                with client.stream(
+                    "POST" if body is not None else "GET",
+                    url + path,
+                    headers=headers,
+                    json=body,
+                ) as response:
+                    if not 200 <= response.status_code < 300:
+                        raise RuntimeError(
+                            f"Text API returned HTTP {response.status_code}. Check the base URL, model name, and API key."
+                        )
+                    chunks = bytearray()
+                    for chunk in response.iter_bytes(chunk_size=8192):
+                        chunks.extend(chunk)
+                        if len(chunks) > MAX_API_BYTES:
+                            raise RuntimeError("Text API response exceeds 1 MiB.")
+            result = json.loads(chunks)
+        except httpx.TimeoutException:
+            raise RuntimeError(
+                "Text API timed out. Check the server or use a faster model."
+            ) from None
+        except httpx.HTTPError:
+            raise RuntimeError(
+                "Could not connect to the text API. Start Ollama or check the configured service."
+            ) from None
+        except (ValueError, UnicodeError):
+            raise RuntimeError("Text API returned invalid JSON.") from None
+        if not isinstance(result, dict):
+            raise RuntimeError("Text API returned an invalid response object.")
+        return result
 
     def process_text(self, request: dict, text: str, progress) -> str:
-        self.prepare_text(progress)
-        from mlx_lm import stream_generate
-        from mlx_lm.sample_utils import make_sampler
-
-        prompt = self.tokenizer.apply_chat_template(
-            messages_for(request, text),
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=False,
-        )
-        if len(self.tokenizer.encode(prompt)) > 24000:
-            raise ValueError("Text exceeds the local model context budget.")
-        progress("Processing text locally…")
-        pieces = []
-        last = None
-        for response in stream_generate(
-            self.text_model,
-            self.tokenizer,
-            prompt,
-            max_tokens=MAX_TEXT_TOKENS,
-            sampler=make_sampler(temp=0.0),
-        ):
-            pieces.append(response.text)
-            last = response
-        if last is None or last.finish_reason == "length":
-            raise RuntimeError(
-                "Text generation reached its limit; shorten the request."
+        if not request["text_model"].strip():
+            raise ValueError(
+                "Choose a text API model in Settings. Use verbatim dictation for ASR only."
             )
-        result = "".join(pieces).strip()
+        progress("Processing text with the configured API…")
+        response = self.api_request(
+            request,
+            "/chat/completions",
+            {
+                **request["text_api_options"],
+                "model": request["text_model"],
+                "messages": messages_for(request, text),
+                "stream": False,
+            },
+        )
+        choices = response.get("choices")
+        if (
+            not isinstance(choices, list)
+            or not choices
+            or not isinstance(choices[0], dict)
+        ):
+            raise RuntimeError("Text API returned no completion.")
+        choice = choices[0]
+        if choice.get("finish_reason") in {"length", "max_tokens"}:
+            raise RuntimeError(
+                "Text generation reached its limit; shorten the request or adjust the server/token settings."
+            )
+        if choice.get("finish_reason") not in {None, "stop"}:
+            raise RuntimeError("Text API did not finish a text response.")
+        message = choice.get("message")
+        if (
+            not isinstance(message, dict)
+            or message.get("tool_calls")
+            or message.get("function_call")
+        ):
+            raise RuntimeError("Text API must return text, not a tool call.")
+        result = message.get("content")
+        if not isinstance(result, str):
+            raise RuntimeError("Text API returned no text content.")
+        result = re.sub(
+            r"^\s*<think>.*?</think>\s*", "", result, flags=re.DOTALL
+        ).strip()
         if not result or "<think>" in result or "</think>" in result:
-            raise RuntimeError("The text model returned an empty or malformed result.")
+            raise RuntimeError("The text API returned an empty or malformed result.")
         if len(result) > MAX_TEXT * 2:
-            raise RuntimeError("The text model output exceeds the size limit.")
+            raise RuntimeError("The text API output exceeds the size limit.")
         return result
 
     def handle(self, value: object, progress=lambda message: None) -> dict:
         started = time.monotonic()
         request = validate_request(value)
+        if request["op"] == "models":
+            progress("Connecting to the text API…")
+            response = self.api_request(request, "/models")
+            data = response.get("data")
+            if not isinstance(data, list):
+                raise RuntimeError("Text API returned an invalid model list.")
+            models = list(
+                dict.fromkeys(
+                    item["id"]
+                    for item in data
+                    if isinstance(item, dict)
+                    and isinstance(item.get("id"), str)
+                    and 0 < len(item["id"]) <= 256
+                    and not any(ord(c) < 32 for c in item["id"])
+                )
+            )[:200]
+            return {"id": request["id"], "ok": True, "models": models}
         if request["op"] == "prepare":
             self.prepare_asr(progress)
-            self.prepare_text(progress)
-            raw = text = warning = ""
+            return {
+                "id": request["id"],
+                "ok": True,
+                "realtime_url": self.asr.url.replace("http://", "ws://", 1)
+                + "/v1/realtime?intent=transcription",
+            }
         else:
             raw = request["text"]
             if request["op"] == "transcribe":

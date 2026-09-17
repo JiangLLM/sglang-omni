@@ -21,7 +21,13 @@ import worker
 
 
 def request(**changes):
-    return {"id": "test", "op": "process", "text": "hello world", **changes}
+    return {
+        "id": "test",
+        "op": "process",
+        "text": "hello world",
+        "text_model": "my-custom-model",
+        **changes,
+    }
 
 
 class WorkerTests(unittest.TestCase):
@@ -36,7 +42,11 @@ class WorkerTests(unittest.TestCase):
             request(language=42),
             request(text="a" * 12001),
             request(asr_model="untrusted/model"),
-            request(text_model="untrusted/model"),
+            request(text_model=123),
+            request(text_api_options=[]),
+            request(text_api_options={"model": "override"}),
+            request(text_api_options={"temperature": float("nan")}),
+            request(text_api_options={"padding": "x" * 8193}),
             request(mode="translate"),
             request(mode="edit"),
             request(unknown=True),
@@ -124,36 +134,152 @@ class WorkerTests(unittest.TestCase):
                 self.assertNotIn("text", result)
                 self.assertIn("model unavailable", result["error"])
 
-    def test_generation_disables_thinking_and_detects_truncation(self):
-        instance = worker.Worker()
-        instance.text_model = object()
-        instance.tokenizer = Mock()
-        instance.tokenizer.apply_chat_template.return_value = "prompt"
-        instance.tokenizer.encode.return_value = [1]
-        generation = types.ModuleType("mlx_lm")
-        generation.stream_generate = Mock(
-            return_value=iter(
-                [types.SimpleNamespace(text="Clean text", finish_reason="stop")]
-            )
-        )
-        sampling = types.ModuleType("mlx_lm.sample_utils")
-        sampling.make_sampler = Mock(return_value=object())
-        with patch.dict(
-            sys.modules, {"mlx_lm": generation, "mlx_lm.sample_utils": sampling}
-        ):
-            result = instance.handle(request())
-            self.assertEqual(result["text"], "Clean text")
-            self.assertFalse(
-                instance.tokenizer.apply_chat_template.call_args.kwargs[
-                    "enable_thinking"
+    def test_text_api_roundtrip_options_auth_and_failures(self):
+        received = []
+        reply = {
+            "status": 200,
+            "body": {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "<think>private reasoning</think>Clean text"
+                        },
+                        "finish_reason": "stop",
+                    }
                 ]
+            },
+        }
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                received.append((self.path, self.headers.get("Authorization"), None))
+                self.respond(
+                    {"data": [{"id": "my-custom-model"}, {"id": "another-model"}]}
+                )
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                received.append((self.path, self.headers.get("Authorization"), body))
+                self.respond(reply["body"])
+
+            def respond(self, body):
+                self.send_response(reply["status"])
+                self.send_header("Location", "/must-not-follow")
+                self.end_headers()
+                self.wfile.write(
+                    body if isinstance(body, bytes) else json.dumps(body).encode()
+                )
+
+            def log_message(self, *args):
+                pass
+
+        http = HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=http.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(http.server_close)
+        self.addCleanup(http.shutdown)
+        instance = worker.Worker()
+        config = {
+            "text_api_url": f"http://127.0.0.1:{http.server_port}/custom/v1/",
+            "text_api_key": "test-secret",
+        }
+        result = instance.handle(
+            request(**config, text_api_options={"temperature": 0.3, "max_tokens": 77})
+        )
+        self.assertEqual(result["text"], "Clean text")
+        path, auth, body = received[-1]
+        self.assertEqual(path, "/custom/v1/chat/completions")
+        self.assertEqual(auth, "Bearer test-secret")
+        self.assertEqual(body["model"], "my-custom-model")
+        self.assertEqual(body["temperature"], 0.3)
+        self.assertEqual(body["max_tokens"], 77)
+        self.assertFalse(body["stream"])
+        self.assertEqual(
+            json.loads(body["messages"][-1]["content"])["transcript"], "hello world"
+        )
+        instance.handle(request(**config))
+        self.assertEqual(set(received[-1][2]), {"model", "messages", "stream"})
+        self.assertEqual(
+            instance.handle(request(op="models", **config))["models"],
+            ["my-custom-model", "another-model"],
+        )
+        self.assertEqual(
+            received[-1], ("/custom/v1/models", "Bearer test-secret", None)
+        )
+
+        for status, body in [
+            (401, {"error": "test-secret hello world"}),
+            (307, {}),
+            (200, b"not json"),
+            (
+                200,
+                {
+                    "choices": [
+                        {"message": {"content": "partial"}, "finish_reason": "length"}
+                    ]
+                },
+            ),
+            (
+                200,
+                {
+                    "choices": [
+                        {
+                            "message": {"content": "", "tool_calls": [{}]},
+                            "finish_reason": "tool_calls",
+                        }
+                    ]
+                },
+            ),
+            (200, b"x" * (worker.MAX_API_BYTES + 1)),
+        ]:
+            with self.subTest(status=status, body_type=type(body).__name__):
+                reply.update(status=status, body=body)
+                count = len(received)
+                result = instance.handle(
+                    request(**config, mode="translate", target_language="fr")
+                )
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["raw_text"], "hello world")
+                self.assertNotIn("test-secret", result["error"])
+                self.assertEqual(len(received), count + 1)
+
+    def test_text_api_boundaries_and_prepare_do_not_require_llm(self):
+        instance = worker.Worker()
+        for url in [
+            "file:///tmp/api",
+            "http://user:password@localhost/v1",
+            "http://localhost/v1?key=secret",
+            "http://localhost:99999/v1",
+            "http://local host/v1",
+            "http://localhost/v1#fragment",
+        ]:
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                instance.api_request(
+                    worker.validate_request(request(text_api_url=url)), "/models"
+                )
+        with self.assertRaises(ValueError):
+            instance.api_request(
+                worker.validate_request(request(text_api_key="secret\nheader")),
+                "/models",
             )
-            generation.stream_generate.return_value = iter(
-                [types.SimpleNamespace(text="partial", finish_reason="length")]
-            )
-            result = instance.handle(request())
-            self.assertEqual(result["text"], "hello world")
-            self.assertIn("limit", result["warning"])
+        instance.prepare_asr = Mock()
+        instance.asr = Mock(url="http://127.0.0.1:12345")
+        instance.api_request = Mock(
+            side_effect=AssertionError("ASR prepare/verbatim must not call text API")
+        )
+        ready = instance.handle(request(op="prepare", text_model=""))
+        self.assertEqual(
+            ready["realtime_url"],
+            "ws://127.0.0.1:12345/v1/realtime?intent=transcription",
+        )
+        self.assertEqual(
+            instance.handle(request(style="verbatim", text_model=""))["text"],
+            "hello world",
+        )
+        self.assertIn(
+            "Choose a text API model",
+            instance.handle(request(text_model=""))["warning"],
+        )
 
     def test_protocol_recovers_after_invalid_json_and_oversized_line(self):
         data = b"not-json\n" + b"x" * (worker.MAX_LINE_BYTES + 20) + b"\n"
@@ -183,7 +309,9 @@ class WorkerTests(unittest.TestCase):
             path = Path(directory) / "audio.wav"
             instance = worker.Worker()
             instance.prepare_asr = Mock(side_effect=AssertionError("must not load ASR"))
-            instance.prepare_text = Mock(side_effect=AssertionError("must not load LM"))
+            instance.process_text = Mock(
+                side_effect=AssertionError("must not call text API")
+            )
             for frames in [b"", b"\0\0" * 1600, struct.pack("<h", 2) * 1600]:
                 with wave.open(str(path), "wb") as audio:
                     audio.setnchannels(1)
@@ -304,6 +432,7 @@ class WorkerTests(unittest.TestCase):
         ):
             instance.start(Mock())
         args = launch.call_args.args[0]
+        self.assertIn("--enable-realtime", args)
         self.assertEqual(args[args.index("--host") + 1], "127.0.0.1")
         self.assertEqual(args[args.index("--model-path") + 1], "/cached/pinned-model")
         self.assertEqual(launch.call_args.kwargs["env"]["SGLANG_USE_MLX"], "1")

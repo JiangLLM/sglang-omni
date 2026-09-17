@@ -83,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func showPanel() {
         if panel == nil {
-            panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 350, height: 72),
+            panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 190),
                             styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
             panel.level = .floating; panel.isOpaque = false; panel.backgroundColor = .clear
             panel.hasShadow = true; panel.hidesOnDeactivate = false
@@ -92,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         let pointer = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { NSMouseInRect(pointer, $0.frame, false) }) ?? NSScreen.main
-        if let visible = screen?.visibleFrame { panel.setFrameOrigin(NSPoint(x: visible.midX - 175, y: visible.minY + 28)) }
+        if let visible = screen?.visibleFrame { panel.setFrameOrigin(NSPoint(x: visible.midX - 230, y: visible.minY + 28)) }
         panel.orderFrontRegardless()
     }
 

@@ -34,13 +34,14 @@ final class AudioCaptureSink: @unchecked Sendable {
     private let lock = NSLock()
     private let converter: AVAudioConverter
     private let format: AVAudioFormat
+    private let onPCM: (@Sendable (Data) -> Void)?
     private var file: AVAudioFile?
     private var failure: Error?
     private var meter = 0.0
     private var framesWritten: AVAudioFrameCount = 0
     private let maximumFrames: AVAudioFrameCount = 300 * 16_000
 
-    init(input: AVAudioFormat, url: URL) throws {
+    init(input: AVAudioFormat, url: URL, onPCM: (@Sendable (Data) -> Void)? = nil) throws {
         guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32,
                                          sampleRate: 16_000, channels: 1, interleaved: false),
               let converter = AVAudioConverter(from: input, to: format) else {
@@ -48,6 +49,7 @@ final class AudioCaptureSink: @unchecked Sendable {
         }
         self.format = format
         self.converter = converter
+        self.onPCM = onPCM
         file = try AVAudioFile(forWriting: url, settings: [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: 16_000,
@@ -92,6 +94,13 @@ final class AudioCaptureSink: @unchecked Sendable {
         do {
             try file.write(from: output)
             framesWritten += output.frameLength
+            if let onPCM, let samples = output.floatChannelData?[0] {
+                let pcm = (0..<Int(output.frameLength)).map { index -> Int16 in
+                    let sample = samples[index].isFinite ? samples[index] : 0
+                    return Int16(min(32767, max(-32768, sample * 32768))).littleEndian
+                }
+                pcm.withUnsafeBytes { onPCM(Data($0)) }
+            }
         }
         catch { failure = error }
     }
@@ -146,7 +155,7 @@ final class AudioRecorder: ObservableObject {
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    func start(deviceUID: String) async throws {
+    func start(deviceUID: String, onPCM: (@Sendable (Data) -> Void)? = nil) async throws {
         guard engine == nil, !isStarting else {
             throw SystemServiceError.unavailable("Recording is already in progress.")
         }
@@ -187,7 +196,7 @@ final class AudioRecorder: ObservableObject {
         }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("OmniTyper-\(UUID().uuidString).wav")
-        let sink = try AudioCaptureSink(input: format, url: url)
+        let sink = try AudioCaptureSink(input: format, url: url, onPCM: onPCM)
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
             sink.consume(buffer)
         }

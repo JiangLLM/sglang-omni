@@ -5,6 +5,18 @@ import AVFoundation
 
 struct WorkerClientTests {
     @Test func testAudioResamplingAndRecordingLimit() throws {
+        final class Packets: @unchecked Sendable {
+            let lock = NSLock()
+            var bytes = 0
+            var first = Data()
+            func receive(_ data: Data) {
+                lock.withLock {
+                    if first.isEmpty { first = data }
+                    bytes += data.count
+                }
+            }
+        }
+        let packets = Packets()
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).wav")
         defer { try? FileManager.default.removeItem(at: url) }
         let inputFormat = try #require(AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -16,7 +28,7 @@ struct WorkerClientTests {
             channels[0][frame] = 0.25
             channels[1][frame] = 0.25
         }
-        let sink = try AudioCaptureSink(input: inputFormat, url: url)
+        let sink = try AudioCaptureSink(input: inputFormat, url: url, onPCM: { packets.receive($0) })
         for _ in 0..<302 { sink.consume(input) }
         try sink.close()
         let file = try AVAudioFile(forReading: url)
@@ -24,6 +36,9 @@ struct WorkerClientTests {
         #expect(file.fileFormat.channelCount == 1)
         #expect(file.fileFormat.commonFormat == .pcmFormatInt16)
         #expect(file.length == 300 * 16_000, "The WAV must never exceed the worker's 300-second limit")
+        #expect(packets.bytes == Int(file.length) * 2, "Streaming and WAV must contain the same number of samples")
+        let pcmSample = Int(packets.first[1024]) | Int(packets.first[1025]) << 8
+        #expect(abs(pcmSample - 8192) < 328, "Streaming packets must be little-endian PCM16 at the resampled amplitude")
         let decoded = try #require(AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 1_024))
         try file.read(into: decoded)
         let sample = try #require(decoded.floatChannelData)[0][512]
