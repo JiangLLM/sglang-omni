@@ -149,7 +149,7 @@ class NativeASRServer:
             recording.writeframes(
                 np.clip(samples * 32768, -32768, 32767).astype("<i2").tobytes()
             )
-        boundary = "OpenTypeless" + secrets.token_hex(16)
+        boundary = "OmniTyper" + secrets.token_hex(16)
         fields = {"model": SERVED_MODEL, "response_format": "json"}
         if language:
             fields["language"] = language

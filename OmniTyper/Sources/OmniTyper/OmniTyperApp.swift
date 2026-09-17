@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 
 @main
-struct OpenTypelessApp: App {
+struct OmniTyperApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene { Settings { EmptyView() } }
 }
@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1060, height: 750),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                           backing: .buffered, defer: false)
-        window.title = "OpenTypeless"
+        window.title = "OmniTyper"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.contentView = NSHostingView(rootView: content)
@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()
-        window.setFrameAutosaveName("OpenTypelessMainWindow")
+        window.setFrameAutosaveName("OmniTyperMainWindow")
         model.showMainWindow = { [weak self] in self?.openWindow() }
         model.showVoicePanel = { [weak self] in self?.showPanel() }
         model.hideVoicePanel = { [weak self] in self?.panel?.orderOut(nil) }
@@ -45,10 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func setupMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "OpenTypeless")
-        statusItem.button?.toolTip = "OpenTypeless — local voice input"
+        statusItem.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "OmniTyper")
+        statusItem.button?.toolTip = "OmniTyper — local voice input"
         let menu = NSMenu()
-        menu.addItem(withTitle: "Open OpenTypeless", action: #selector(openWindow), keyEquivalent: "")
+        menu.addItem(withTitle: "Open OmniTyper", action: #selector(openWindow), keyEquivalent: "")
         menu.addItem(.separator())
         for mode in VoiceMode.allCases {
             let item = NSMenuItem(title: mode.title, action: #selector(startFromMenu(_:)), keyEquivalent: "")
@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(withTitle: "Stop recording", action: #selector(stopRecording), keyEquivalent: "")
         menu.addItem(withTitle: "Cancel", action: #selector(cancelRecording), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit OpenTypeless", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit OmniTyper", action: #selector(quit), keyEquivalent: "q")
         for item in menu.items { item.target = self }
         statusItem.menu = menu
     }

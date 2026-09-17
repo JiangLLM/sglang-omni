@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Testing
 import AVFoundation
-@testable import OpenTypeless
+@testable import OmniTyper
 
 struct WorkerClientTests {
     @Test func testAudioResamplingAndRecordingLimit() throws {
@@ -35,10 +35,10 @@ struct WorkerClientTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let script = directory.appendingPathComponent("worker.py")
-        let oldWorker = ProcessInfo.processInfo.environment["OPENTYPELESS_WORKER"]
-        let python = ProcessInfo.processInfo.environment["OPENTYPELESS_TEST_PYTHON"] ?? "/usr/bin/python3"
+        let oldWorker = ProcessInfo.processInfo.environment["OMNITYPER_WORKER"]
+        let python = ProcessInfo.processInfo.environment["OMNITYPER_TEST_PYTHON"] ?? "/usr/bin/python3"
         guard FileManager.default.isExecutableFile(atPath: python) else {
-            Issue.record("Set OPENTYPELESS_TEST_PYTHON to a Python 3 executable.")
+            Issue.record("Set OMNITYPER_TEST_PYTHON to a Python 3 executable.")
             return
         }
         try #"""
@@ -73,12 +73,12 @@ struct WorkerClientTests {
             if op == 'final_exit':
                 sys.exit(0)
         """#.write(to: script, atomically: true, encoding: .utf8)
-        setenv("OPENTYPELESS_WORKER", script.path, 1)
+        setenv("OMNITYPER_WORKER", script.path, 1)
         let client = WorkerClient()
         defer {
             client.stop()
-            if let oldWorker { setenv("OPENTYPELESS_WORKER", oldWorker, 1) }
-            else { unsetenv("OPENTYPELESS_WORKER") }
+            if let oldWorker { setenv("OMNITYPER_WORKER", oldWorker, 1) }
+            else { unsetenv("OMNITYPER_WORKER") }
             try? FileManager.default.removeItem(at: directory)
         }
 
@@ -140,7 +140,7 @@ struct WorkerClientTests {
         #expect(!client.isRunning)
 
         let log = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Logs/OpenTypeless/worker.log")
+            .appendingPathComponent("Logs/OmniTyper/worker.log")
         let diagnostics = try String(contentsOf: log, encoding: .utf8)
         #expect(!diagnostics.contains("PRIVATE_TRANSCRIPT_DO_NOT_LOG"))
         #expect(diagnostics.utf8.count <= 8_192)

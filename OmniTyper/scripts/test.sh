@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 APP_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON_BIN="${OPENTYPELESS_PYTHON:-$APP_ROOT/.venv/bin/python}"
+PYTHON_BIN="${OMNITYPER_PYTHON:-$APP_ROOT/.venv/bin/python}"
 SWIFT_FLAGS=(--package-path "$APP_ROOT")
 # Some standalone Command Line Tools releases omit automatic Testing plugin discovery.
 SWIFT_BIN="$(xcrun --find swift)"

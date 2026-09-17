@@ -42,9 +42,9 @@ final class AppModel: ObservableObject {
         let store = store ?? AppStore()
         self.store = store
         if store.preferences.pythonExecutable.isEmpty {
-            store.preferences.pythonExecutable = Bundle.main.object(forInfoDictionaryKey: "OpenTypelessPython") as? String
+            store.preferences.pythonExecutable = Bundle.main.object(forInfoDictionaryKey: "OmniTyperPython") as? String
                 ?? FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent("Library/Application Support/OpenTypeless/runtime/bin/python").path
+                    .appendingPathComponent("Library/Application Support/OmniTyper/runtime/bin/python").path
         }
         refreshPermissions()
         preferencesSubscription = store.$preferences.dropFirst().removeDuplicates().sink { [weak self] preferences in
@@ -123,7 +123,7 @@ final class AppModel: ObservableObject {
             showMainWindow?()
             return
         }
-        lastApp = target?.applicationName ?? "OpenTypeless"
+        lastApp = target?.applicationName ?? "OmniTyper"
         do { _ = try payload(audio: nil) }
         catch { self.error = error.localizedDescription; showMainWindow?(); return }
         phase = .starting
@@ -252,7 +252,7 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            let copy = FileManager.default.temporaryDirectory.appendingPathComponent("OpenTypeless-\(UUID()).wav")
+            let copy = FileManager.default.temporaryDirectory.appendingPathComponent("OmniTyper-\(UUID()).wav")
             try FileManager.default.copyItem(at: audio, to: copy)
             discardRetryRecording()
             target = nil; mode = entry.mode; lastApp = entry.appName; sessionPreferences = store.preferences

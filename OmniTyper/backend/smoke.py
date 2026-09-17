@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--audio", type=Path)
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="opentypeless-smoke-") as directory:
+    with tempfile.TemporaryDirectory(prefix="omnityper-smoke-") as directory:
         audio = args.audio
         if audio is None:
             source = Path(directory) / "speech.aiff"

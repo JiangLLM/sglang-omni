@@ -1,9 +1,49 @@
 // SPDX-License-Identifier: Apache-2.0
 import Testing
 import Foundation
-@testable import OpenTypeless
+@testable import OmniTyper
 
 struct StoreTests {
+    @Test @MainActor func renamedAppMigratesLibraryAndRuntimeWithoutOverwritingNewData() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let legacy = root.appendingPathComponent("Library/OpenTypeless")
+        let current = root.appendingPathComponent("Library/OmniTyper")
+        let oldPython = root.appendingPathComponent("openTypeless/.venv/bin/python")
+        let python = root.appendingPathComponent("OmniTyper/.venv/bin/python")
+        try FileManager.default.createDirectory(at: python.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: python)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: python.path)
+        let original = AppStore(directory: legacy)
+        original.preferences.pythonExecutable = oldPython.path
+        original.preferences.keepAudio = true
+        original.preferences.historyDays = 0
+        original.addWord(spoken: "S G Lang", written: "SGLang")
+        let recording = root.appendingPathComponent("recording.wav")
+        let audio = Data([1, 2, 3])
+        try audio.write(to: recording)
+        original.add(HistoryEntry(mode: .dictate, appName: "Test", rawText: "hello", text: "Hello.", duration: 1), recording: recording)
+
+        let migrated = AppStore(directory: current)
+        #expect(migrated.storageError.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: legacy.path))
+        #expect(migrated.preferences.pythonExecutable == python.path)
+        #expect(migrated.dictionary == original.dictionary)
+        #expect(migrated.history == original.history)
+        #expect(try Data(contentsOf: #require(migrated.audioURL(for: migrated.history[0]))) == audio)
+        #expect(AppStore(directory: current).preferences.pythonExecutable == python.path)
+
+        // Reappearing legacy data must not replace the new library or a custom runtime.
+        AppStore(directory: legacy).addWord(spoken: "old", written: "Old")
+        let legacyFile = legacy.appendingPathComponent("library.json")
+        let legacyBytes = try Data(contentsOf: legacyFile)
+        migrated.preferences.pythonExecutable = "/custom/runtime/bin/python"
+        let reloaded = AppStore(directory: current)
+        #expect(reloaded.dictionary == migrated.dictionary)
+        #expect(reloaded.preferences.pythonExecutable == "/custom/runtime/bin/python")
+        #expect(try Data(contentsOf: legacyFile) == legacyBytes)
+    }
+
     @Test func csvHandlesQuotedCommasNewlinesAndRejectsCorruption() throws {
         let parsed = try DictionaryCSV.parse("spoken,written\n\"a,b\",\"line 1\nline 2\"\n\"a\"\"b\",c\n")
         #expect(parsed == [["spoken", "written"], ["a,b", "line 1\nline 2"], ["a\"b", "c"]])

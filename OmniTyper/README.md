@@ -1,6 +1,6 @@
-# OpenTypeless
+# OmniTyper
 
-**A little less typing.** 面向 Apple Silicon Mac 的开源语音输入应用。原生 SwiftUI / AppKit 界面，使用 **SGLang-Omni 的原生 MLX Qwen3-ASR 服务**识别语音，用本地 Qwen3 文本模型完成整理、翻译和语音编辑。
+**Local voice typing, powered by SGLang-Omni.** 面向 Apple Silicon Mac 的开源语音输入应用。原生 SwiftUI / AppKit 界面，使用 **SGLang-Omni 的原生 MLX Qwen3-ASR 服务**识别语音，用本地 Qwen3 文本模型完成整理、翻译和语音编辑。
 
 无需账号、订阅或云端推理 API。独立项目，与 Typeless 无关联，不使用其商标素材或私有代码。
 
@@ -11,11 +11,11 @@
 在 `sglang-omni` 根目录执行：
 
 ```bash
-bash openTypeless/scripts/setup.sh
-open openTypeless/dist/OpenTypeless.app
+bash OmniTyper/scripts/setup.sh
+open OmniTyper/dist/OmniTyper.app
 ```
 
-安装脚本复用仓库根目录的 `install.sh`：创建 `openTypeless/.venv`，安装 SGLang `v0.5.19` 的 Apple Silicon 依赖、当前 SGLang-Omni，以及 `ffmpeg@7`。不会安装 CUDA 包或替换系统 Python。Homebrew 和 Command Line Tools 需预先安装。
+安装脚本复用仓库根目录的 `install.sh`：创建 `OmniTyper/.venv`，安装 SGLang `v0.5.19` 的 Apple Silicon 依赖、当前 SGLang-Omni，以及 `ffmpeg@7`。不会安装 CUDA 包或替换系统 Python。Homebrew 和 Command Line Tools 需预先安装。
 
 首次打开：
 
@@ -27,6 +27,8 @@ open openTypeless/dist/OpenTypeless.app
 从主窗口直接点击 Start speaking 时，结果显示在应用内供复制。跨应用写入请在目标应用中使用全局快捷键。
 
 应用关闭主窗口后保留菜单栏图标；菜单中的 Quit 会退出应用并关闭其模型进程。启动登录项需要先将构建出的应用放在固定位置，建议 `~/Applications`，再开启 **Open at login**。
+
+从旧名 OpenTypeless 升级时，请先退出旧应用。首次启动会将旧数据目录迁移到 `~/Library/Application Support/OmniTyper`，保留设置、词典、历史和音频；已有新目录时不会覆盖它。项目目录移动后，已失效的旧 Python 路径会在新路径可执行时自动更新。应用标识现为 `org.sglang.OmniTyper`，需要为 OmniTyper 重新授予麦克风、辅助功能权限，并按需重新开启登录项。
 
 ## 已实现的使用流程
 
@@ -48,7 +50,7 @@ open openTypeless/dist/OpenTypeless.app
 
 ## 模型与运行边界
 
-上游基线为 `27a8293c2d1e91077a48e79926868d6dc039dd3d`。该版本已经包含 `sglang_omni/models/qwen3_asr/mlx/`、MLX scheduler/runner 及 Apple Silicon 安装支持，OpenTypeless 直接复用它们，**没有重复实现 ASR 或引入 mlx-audio**。
+上游基线为 `27a8293c2d1e91077a48e79926868d6dc039dd3d`。该版本已经包含 `sglang_omni/models/qwen3_asr/mlx/`、MLX scheduler/runner 及 Apple Silicon 安装支持，OmniTyper 直接复用它们，**没有重复实现 ASR 或引入 mlx-audio**。
 
 ```text
 SwiftUI / AppKit
@@ -69,8 +71,8 @@ worker 为应用私有进程，不对外暴露控制 API。原生 SGLang-Omni �
 历史和设置保存于：
 
 ```text
-~/Library/Application Support/OpenTypeless/library.json
-~/Library/Application Support/OpenTypeless/Audio/
+~/Library/Application Support/OmniTyper/library.json
+~/Library/Application Support/OmniTyper/Audio/
 ```
 
 目录权限 `0700`，数据文件 `0600`，采用原子写入，不提供额外的磁盘加密。最多保留 1,000 条记录，支持 24 小时、7 天、30 天、1 年、永久；关闭历史会删除已有记录，关闭音频保留会删除已保留的音频。失败录音仅在当前会话暂存用于重试，退出时删除。崩溃或强制退出可能留下系统临时文件。模型下载缓存位于 Hugging Face 的标准缓存目录。应用不含分析埋点。
@@ -79,38 +81,38 @@ worker 为应用私有进程，不对外暴露控制 API。原生 SGLang-Omni �
 
 ```bash
 # 已有 Python 运行环境，只编译应用
-OPENTYPELESS_PYTHON=/absolute/path/to/python bash openTypeless/scripts/build.sh
+OMNITYPER_PYTHON=/absolute/path/to/python bash OmniTyper/scripts/build.sh
 
 # 单元与集成测试（无需下载模型、无需麦克风权限）
-bash openTypeless/scripts/test.sh
+bash OmniTyper/scripts/test.sh
 
 # 真实 MLX 链路：生成本地测试音频，验证识别、整理、翻译、编辑及问答
-openTypeless/.venv/bin/python openTypeless/backend/smoke.py
+OmniTyper/.venv/bin/python OmniTyper/backend/smoke.py
 
 # 使用自己的 WAV 做真实识别测试
-openTypeless/.venv/bin/python openTypeless/backend/smoke.py --audio /absolute/path/to/audio.wav
+OmniTyper/.venv/bin/python OmniTyper/backend/smoke.py --audio /absolute/path/to/audio.wav
 ```
 
 开发模式可用 `CONFIGURATION=debug` 构建。应用 bundle 内携带 worker 源码，Info.plist 记录 Python 环境的绝对路径；当前构建是源码开发分发，不是携带全部 Python 和模型的独立安装包。迁移至另一台 Mac 时运行 setup，或者在设置里指定该机已安装的运行环境。不要移动或删除正在使用的仓库/虚拟环境。
 
 `build.sh` 默认使用 ad-hoc 签名供本地运行。公开分发需要设置 `CODE_SIGN_IDENTITY`，使用自己的 Developer ID 签名并完成 Apple notarization。这里没有上传或发布任何版本。
 
-测试覆盖协议分帧、退出/取消、音频重采样和时长上限、CSV 格式、词典、历史保留、损坏数据保护、后端请求校验、静音和失败恢复。辅助功能权限、麦克风硬件以及各个第三方应用的插入兼容性需要在授权后的真实桌面上验收。
+测试覆盖改名时的数据和运行环境路径迁移、协议分帧、退出/取消、音频重采样和时长上限、CSV 格式、词典、历史保留、损坏数据保护、后端请求校验、静音和失败恢复。辅助功能权限、麦克风硬件以及各个第三方应用的插入兼容性需要在授权后的真实桌面上验收。
 
 ### 本机验证记录
 
 2026-09-17，在 16 GB Apple Silicon Mac、macOS 26.6.2、Swift 6.4、Python 3.12.13 上验证：
 
-- 11 项 Swift 测试和 15 项 Python 测试通过；release 应用编译、ad-hoc 签名校验和应用自身窗口渲染通过。
+- 12 项 Swift 测试和 15 项 Python 测试通过，包含旧数据迁移、新库不被覆盖、自定义运行环境保留；release 应用编译、ad-hoc 签名校验和应用自身窗口渲染通过。
 - 缓存模型后设置 `HF_HUB_OFFLINE=1`，通过真实 SGLang-Omni MLX 识别与本地文本模型测试。英语测试音频由系统 Samantha 语音生成，识别结果完整包含 “The quick brown fox jumps over the lazy dog. Please send the report tomorrow.”。
 - 中文语音混合技术词，在提供 SGLang 词汇提示后识别为“你好，请在明天发送报告。我们使用SGLang做性能优化。”。
-- 中英法口头语整理保留原语言；法语翻译、将选中文字中的 ten 改为 eleven、问答均得到预期结果。最后一轮首次英语识别约 9.8 秒（含服务启动），首次整理约 3.5 秒（含文本模型加载），随后四个短文本请求约 0.5–1.0 秒。这是少量合成语音和文本样本的功能检查，不代表实际口音、噪声或长文本的质量与延迟保证。
+- 中英法口头语整理保留原语言；法语翻译、将选中文字中的 ten 改为 eleven、问答均得到预期结果。改名后的离线复测全部六个场景通过：首次英语识别约 12.9 秒（含服务启动），首次整理约 4.2 秒（含文本模型加载），随后四个短文本请求约 0.2–0.6 秒。这是少量合成语音和文本样本的功能检查，不代表实际口音、噪声或长文本的质量与延迟保证。
 
-可重复的真实模型检查：`HF_HUB_OFFLINE=1 openTypeless/.venv/bin/python openTypeless/backend/smoke.py`。模型需已下载；该脚本不会录制麦克风。尚未完成真实麦克风、全局快捷键及第三方应用插入的交互验收。
+可重复的真实模型检查：`HF_HUB_OFFLINE=1 OmniTyper/.venv/bin/python OmniTyper/backend/smoke.py`。模型需已下载；该脚本不会录制麦克风。尚未完成真实麦克风、全局快捷键及第三方应用插入的交互验收。
 
 ## 故障定位
 
-- **没有快捷键响应**：在系统设置允许 OpenTypeless 的辅助功能访问，再重启应用；开发中重新签名可能需要移除旧授权后重新添加。
+- **没有快捷键响应**：在系统设置允许 OmniTyper 的辅助功能访问，再重启应用；开发中重新签名可能需要移除旧授权后重新添加。
 - **麦克风不可用**：允许麦克风访问，确认设置中选定设备仍连接。系统默认设备会在下一次录音时读取。
 - **模型启动失败**：先运行 `scripts/setup.sh`；确认 Python 为 3.12、`ffmpeg@7` 可用，及 Hugging Face 可访问。代理环境需支持 HTTPX 的 SOCKS 依赖，setup 已包含。
 - **编辑/翻译失败**：应用不会把错误语言的原始识别结果自动写入。可修复运行环境后重试，或复制已恢复的原始转写。

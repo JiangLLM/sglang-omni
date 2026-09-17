@@ -107,13 +107,13 @@ final class WorkerClient: ObservableObject {
         if let process, process.isRunning, pythonPath == executable.path { return }
         shutdown()
         let bundled = Bundle.main.resourceURL?.appendingPathComponent("backend/worker.py")
-        let overridden = ProcessInfo.processInfo.environment["OPENTYPELESS_WORKER"].map {
+        let overridden = ProcessInfo.processInfo.environment["OMNITYPER_WORKER"].map {
             URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath)
         }
         guard let worker = [bundled, overridden].compactMap({ $0 }).first(where: {
             FileManager.default.isReadableFile(atPath: $0.path)
         }) else {
-            throw WorkerError.unavailable("The local worker is missing. Rebuild the app, or set OPENTYPELESS_WORKER to backend/worker.py.")
+            throw WorkerError.unavailable("The local worker is missing. Rebuild the app, or set OMNITYPER_WORKER to backend/worker.py.")
         }
         let child = Process()
         let stdin = Pipe()
@@ -312,7 +312,7 @@ final class WorkerClient: ObservableObject {
         diagnostics += "\(Date().ISO8601Format()) \(message)\n"
         if diagnostics.utf8.count > 8_192 { diagnostics = String(diagnostics.suffix(4_096)) }
         guard let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
-        let directory = library.appendingPathComponent("Logs/OpenTypeless", isDirectory: true)
+        let directory = library.appendingPathComponent("Logs/OmniTyper", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try Data(diagnostics.utf8).write(to: directory.appendingPathComponent("worker.log"), options: .atomic)

@@ -121,8 +121,15 @@ final class AppStore: ObservableObject {
 
     init(directory: URL? = nil) {
         self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("OpenTypeless", isDirectory: true)
+            .appendingPathComponent("OmniTyper", isDirectory: true)
         do {
+            // Move the previous app's library once; never replace an existing library.
+            let legacy = self.directory.deletingLastPathComponent().appendingPathComponent("OpenTypeless", isDirectory: true)
+            if self.directory.lastPathComponent == "OmniTyper",
+               !FileManager.default.fileExists(atPath: self.directory.path),
+               FileManager.default.fileExists(atPath: legacy.path) {
+                try FileManager.default.moveItem(at: legacy, to: self.directory)
+            }
             try FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true,
                                                     attributes: [.posixPermissions: 0o700])
             if FileManager.default.fileExists(atPath: file.path) {
@@ -134,10 +141,20 @@ final class AppStore: ObservableObject {
         } catch {
             // Preserve unreadable user data. Never overwrite it with an empty library.
             canSave = false
-            storageError = "Could not read your library. Original files are preserved at \(self.directory.path). \(error.localizedDescription)"
+            storageError = "Could not load or migrate your library. Existing data will not be overwritten. \(error.localizedDescription)"
         }
         loaded = true
-        if canSave { prune(); removeOrphanedAudio() }
+        if canSave {
+            // Repair a saved interpreter path after the project/data directory rename.
+            let previous = preferences.pythonExecutable
+            let relocated = previous.replacingOccurrences(of: "/openTypeless/", with: "/OmniTyper/")
+                .replacingOccurrences(of: "/OpenTypeless/", with: "/OmniTyper/")
+            if relocated != previous, !FileManager.default.isExecutableFile(atPath: previous),
+               FileManager.default.isExecutableFile(atPath: relocated) {
+                preferences.pythonExecutable = relocated
+            }
+            prune(); removeOrphanedAudio()
+        }
     }
 
     func persist() {

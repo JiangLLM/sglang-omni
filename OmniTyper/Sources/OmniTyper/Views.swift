@@ -75,8 +75,8 @@ struct RootView: View {
                     .foregroundStyle(.white).frame(width: 40, height: 40)
                     .background(brandGreen, in: RoundedRectangle(cornerRadius: 13))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("OpenTypeless").font(.system(size: 16, weight: .semibold))
-                    Text("A little less typing.").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text("OmniTyper").font(.system(size: 16, weight: .semibold))
+                    Text("Local voice typing.").font(.system(size: 10)).foregroundStyle(.secondary)
                 }
             }.padding(.top, 35).padding(.horizontal, 18)
             VStack(spacing: 6) {
@@ -553,7 +553,7 @@ struct PreferencesView: View {
                     }
                     DisclosureGroup("Runtime location") {
                         TextField("Python executable", text: $store.preferences.pythonExecutable).textFieldStyle(.roundedBorder).padding(.top, 8)
-                        Text("Set up the runtime with openTypeless/scripts/setup.sh before preparing models.").font(.caption).foregroundStyle(.secondary)
+                        Text("Set up the runtime with OmniTyper/scripts/setup.sh before preparing models.").font(.caption).foregroundStyle(.secondary)
                     }
                     Text("First use downloads model weights from Hugging Face. Audio and text inference stay local; no telemetry is collected.").font(.caption).foregroundStyle(.secondary)
                 }
@@ -585,7 +585,7 @@ struct PreferencesView: View {
                         Button("Microphone settings") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!) }
                         Button("Accessibility settings") { model.requestAccessibility() }
                     }
-                    Text("OpenTypeless 0.1 · Apache-2.0 · Independent of Typeless").font(.caption).foregroundStyle(.secondary)
+                    Text("OmniTyper 0.1 · Apache-2.0 · Independent of Typeless").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }.onAppear { microphones = AudioRecorder.devices() }
@@ -622,14 +622,14 @@ private enum FileActions {
     }
     static func exportHistory(_ entries: [HistoryEntry]) {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; encoder.dateEncodingStrategy = .iso8601
-        save(name: "OpenTypeless-history.json", type: .json) { try encoder.encode(entries) }
+        save(name: "OmniTyper-history.json", type: .json) { try encoder.encode(entries) }
     }
     static func exportDictionary(_ entries: [DictionaryEntry]) {
         func escape(_ text: String) -> String { "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
         let text = "spoken,written\n" + entries.map { "\(escape($0.spoken)),\(escape($0.written))" }.joined(separator: "\n")
-        save(name: "OpenTypeless-dictionary.csv", type: .commaSeparatedText) { Data(text.utf8) }
+        save(name: "OmniTyper-dictionary.csv", type: .commaSeparatedText) { Data(text.utf8) }
     }
-    static func exportAudio(_ url: URL) { save(name: "OpenTypeless-recording.wav", type: .wav) { try Data(contentsOf: url) } }
+    static func exportAudio(_ url: URL) { save(name: "OmniTyper-recording.wav", type: .wav) { try Data(contentsOf: url) } }
     private static func save(name: String, type: UTType, data: () throws -> Data) {
         let panel = NSSavePanel(); panel.nameFieldStringValue = name; panel.allowedContentTypes = [type]
         guard panel.runModal() == .OK, let url = panel.url else { return }

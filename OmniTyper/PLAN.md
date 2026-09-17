@@ -1,4 +1,4 @@
-# OpenTypeless implementation plan
+# OmniTyper implementation plan
 
 Goal: a usable, open-source, local macOS voice typing application with Typeless-style dictation, translation, selected-text editing, and questions.
 
@@ -28,13 +28,13 @@ Contract: one JSON object per stdin line with `id` string and `op` (`prepare`, `
 
 ## Task 2: macOS system services
 
-Files: `Sources/OpenTypeless/SystemServices.swift`, `Sources/OpenTypeless/WorkerClient.swift`.
+Files: `Sources/OmniTyper/SystemServices.swift`, `Sources/OmniTyper/WorkerClient.swift`.
 
 Contract: `@MainActor AudioRecorder: ObservableObject` with published `level: Double`, `elapsed: Double`, static `devices() -> [MicrophoneDevice]` (id/name), `start(deviceUID: String) async throws`, `stop() throws -> URL`, `cancel()`. `@MainActor GlobalShortcut` with `start(keyCode: UInt16, modifiers: UInt64, hold: Bool, onStart: @escaping () -> Void, onStop: @escaping () -> Void, onCancel: @escaping () -> Void)`, `stop()`. CGEvent modifier bitmask; empty input UID = default. Main controller handles toggle via onStart; hold emits onStart/onStop.
 
 `@MainActor TextInsertion` with static `isTrusted: Bool`, `requestPermission()`, `capture() throws -> InsertionTarget` (applicationName, bundleID, selectedText), `insert(_ text: String, into: InsertionTarget) async throws`, `copy(_ text: String)`.
 
-`@MainActor WorkerClient: ObservableObject` published `status: String`, `isRunning: Bool`; `request(_ payload: [String: Any], python: String) async throws -> [String: Any]`; `stop()`. Worker path from `Bundle.main.resourceURL/backend/worker.py`, fallback `OPENTYPELESS_WORKER`; model stderr to bounded log, cancellation/timeout/crash resume continuation once. No shell invocation.
+`@MainActor WorkerClient: ObservableObject` published `status: String`, `isRunning: Bool`; `request(_ payload: [String: Any], python: String) async throws -> [String: Any]`; `stop()`. Worker path from `Bundle.main.resourceURL/backend/worker.py`, fallback `OMNITYPER_WORKER`; model stderr to bounded log, cancellation/timeout/crash resume continuation once. No shell invocation.
 
 - [x] Implement recording, input device selection and meter.
 - [x] Implement key event monitoring, cancel, secure field rejection and target-safe paste.
@@ -42,7 +42,7 @@ Contract: `@MainActor AudioRecorder: ObservableObject` with published `level: Do
 
 ## Task 3: application and distribution
 
-Files: `Package.swift`, `Sources/OpenTypeless/{App,AppModel,Views,Store}.swift`, `scripts/*.sh`, `Resources/Info.plist`, `Tests/`, `README.md`.
+Files: `Package.swift`, `Sources/OmniTyper/{OmniTyperApp,AppModel,Views,Store}.swift`, `scripts/*.sh`, `Resources/Info.plist`, `Tests/`, `README.md`.
 
 - [x] Build dashboard, voice panel, history, dictionary, app rules and settings using native controls.
 - [x] Connect recorder/worker/insertion with explicit idle/recording/processing state, stale response protection and recoverable errors.

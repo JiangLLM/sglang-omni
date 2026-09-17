@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Run: openTypeless/.venv/bin/python -m unittest discover -s openTypeless/backend -v"""
+"""Run: OmniTyper/.venv/bin/python -m unittest discover -s OmniTyper/backend -v"""
 
 import io
 import json
@@ -265,7 +265,7 @@ class WorkerTests(unittest.TestCase):
         instance.url = f"http://127.0.0.1:{http.server_port}"
         try:
             result = instance.transcribe(
-                np.zeros(1600), 16000, "English", ["OpenTypeless"]
+                np.zeros(1600), 16000, "English", ["OmniTyper"]
             )
         finally:
             thread.join(timeout=3)
@@ -275,7 +275,7 @@ class WorkerTests(unittest.TestCase):
         self.assertIn("multipart/form-data", received["content_type"])
         self.assertIn(b"Qwen/Qwen3-ASR-0.6B", received["body"])
         self.assertIn(b"English", received["body"])
-        self.assertIn(b"OpenTypeless", received["body"])
+        self.assertIn(b"OmniTyper", received["body"])
         self.assertIn(b"RIFF", received["body"])
 
     def test_native_server_cleanup_kills_owned_process_group(self):

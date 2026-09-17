@@ -163,7 +163,7 @@ final class AudioRecorder: ObservableObject {
         try Task.checkCancellation()
         guard generation == currentGeneration else { throw CancellationError() }
         guard authorized else {
-            throw SystemServiceError.unavailable("Enable Microphone access for OpenTypeless in System Settings → Privacy & Security.")
+            throw SystemServiceError.unavailable("Enable Microphone access for OmniTyper in System Settings → Privacy & Security.")
         }
 
         let engine = AVAudioEngine()
@@ -186,7 +186,7 @@ final class AudioRecorder: ObservableObject {
             throw SystemServiceError.unavailable("The microphone has no available audio input.")
         }
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("OpenTypeless-\(UUID().uuidString).wav")
+            .appendingPathComponent("OmniTyper-\(UUID().uuidString).wav")
         let sink = try AudioCaptureSink(input: format, url: url)
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
             sink.consume(buffer)
