@@ -4,14 +4,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
 
 from sglang.srt.managers.schedule_batch import NextBatchPlan, Req, ScheduleBatch
 
+from sglang_omni.models.minimax_music3.sglang_request_builder import (
+    MiniMaxMusic3SGLangRequestData,
+    cfg_uncond_rid,
+    is_cfg_uncond_rid,
+)
 from sglang_omni.proto import StagePayload
 from sglang_omni.scheduling.omni_scheduler import OmniScheduler
-
-from .sglang_request_builder import cfg_uncond_rid, is_cfg_uncond_rid
 
 
 class MiniMaxMusic3Scheduler(OmniScheduler):
@@ -21,7 +23,7 @@ class MiniMaxMusic3Scheduler(OmniScheduler):
         self,
         payload: StagePayload,
         pending_stream_done: bool,
-        req_data: Any,
+        req_data: MiniMaxMusic3SGLangRequestData,
         *,
         request_admission_lock_held: bool = False,
     ) -> None:
@@ -40,7 +42,11 @@ class MiniMaxMusic3Scheduler(OmniScheduler):
         with self._request_admission_lock:
             self._enqueue_cfg_uncond(req_data, uncond)
 
-    def _enqueue_cfg_uncond(self, req_data: Any, uncond: Any) -> None:
+    def _enqueue_cfg_uncond(
+        self,
+        req_data: MiniMaxMusic3SGLangRequestData,
+        uncond: MiniMaxMusic3SGLangRequestData,
+    ) -> None:
         cond_req = req_data.req
         if not self.waiting_queue or self.waiting_queue[-1] is not cond_req:
             return
