@@ -56,7 +56,7 @@ import torch
 
 logger = logging.getLogger(__name__)
 
-_IdentityValueT = TypeVar("_IdentityValueT")
+IdentityValueT = TypeVar("IdentityValueT")
 
 ENV_WEIGHT_SHARE = "SGLANG_OMNI_WEIGHT_SHARE"
 ENV_WEIGHT_SHARE_TIMEOUT_S = "SGLANG_OMNI_WEIGHT_SHARE_TIMEOUT_S"
@@ -873,7 +873,7 @@ def _attach_and_check(
 
 
 def _check_model_identity(
-    payload: dict[str, _IdentityValueT],
+    payload: dict[str, IdentityValueT],
     model_path: str | None,
     model_revision: str | None,
     file_path: str,

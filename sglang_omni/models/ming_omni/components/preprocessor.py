@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_MessageT = TypeVar("_MessageT", bound=Mapping[str, object])
+MessageT = TypeVar("MessageT", bound=Mapping[str, object])
 
 # Ming-Omni chat template tokens
 ROLE_HUMAN = "<role>HUMAN</role>"
@@ -649,7 +649,7 @@ class MingPreprocessor:
 
     def _build_prompt(
         self,
-        messages: list[_MessageT],
+        messages: list[MessageT],
         *,
         audio_token_counts: list[int] | None = None,
         image_token_counts: list[int] | None = None,

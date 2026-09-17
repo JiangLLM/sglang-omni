@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 _HANDLED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
 
-class _StageRuntimeLog(TypedDict):
+class StageRuntimeLog(TypedDict):
     gpu: int | list[int] | None
     total_gpu_memory_fraction: float | None
     kv_cache_bytes: int | None
@@ -68,19 +68,19 @@ class _StageRuntimeLog(TypedDict):
     mem_fraction_static: float | None
 
 
-class _GpuDeviceLog(TypedDict):
+class GpuDeviceLog(TypedDict):
     device_id: int | str | None
     name: str
     total_memory: str
 
 
-class _ProcessGroupLog(TypedDict):
+class ProcessGroupLog(TypedDict):
     stages: list[str]
     gpu: int | None
 
 
-class _GpuPlacementLog(TypedDict):
-    hardware: _GpuDeviceLog
+class GpuPlacementLog(TypedDict):
+    hardware: GpuDeviceLog
     stages: list[str]
     total_gpu_memory_fraction: float
     missing_fraction_stages: list[str]
@@ -88,16 +88,16 @@ class _GpuPlacementLog(TypedDict):
     total_reserve_bytes: int
 
 
-class _PlacementLog(TypedDict):
+class PlacementLog(TypedDict):
     topology: str
     pipeline: str | None
-    process_groups: dict[str, _ProcessGroupLog]
+    process_groups: dict[str, ProcessGroupLog]
     tp_process_groups: dict[str, list[str]]
-    stage_runtime: dict[str, _StageRuntimeLog]
-    gpus: dict[int, _GpuPlacementLog]
+    stage_runtime: dict[str, StageRuntimeLog]
+    gpus: dict[int, GpuPlacementLog]
 
 
-class _ModelCapabilitiesLog(TypedDict):
+class ModelCapabilitiesLog(TypedDict):
     architecture: str
     reference_audio: bool
     batch_vocoder: bool
@@ -174,10 +174,10 @@ def _default_template(profiler_dir: str, run_id: str) -> str:
 # ---------------------------------------------------------------------------
 def _stage_runtime_log_summary(
     pipeline_config: PipelineConfig,
-) -> dict[str, _StageRuntimeLog]:
+) -> dict[str, StageRuntimeLog]:
     """Build stage placement and runtime budget fields for startup logs."""
 
-    summary: dict[str, _StageRuntimeLog] = {}
+    summary: dict[str, StageRuntimeLog] = {}
     for stage in pipeline_config.stages:
         fraction = stage.gpu_memory_fraction
         kv_cache_bytes = (
@@ -198,7 +198,7 @@ def _stage_runtime_log_summary(
     return summary
 
 
-def _format_gpu_device_info(info: GpuDeviceInfo) -> _GpuDeviceLog:
+def _format_gpu_device_info(info: GpuDeviceInfo) -> GpuDeviceLog:
     return {
         "device_id": info.device_id,
         "name": info.name or "unknown",
@@ -214,7 +214,7 @@ def _placement_log_summary(
     placement_plan,
     process_plan,
     pipeline_config: PipelineConfig,
-) -> _PlacementLog:
+) -> PlacementLog:
     """Build the resolved startup placement summary.
 
     The summary includes topology, stage placement, stage budgets, per-GPU
@@ -253,7 +253,7 @@ def _placement_log_summary(
 
 def _model_capabilities_log_summary(
     pipeline_config: PipelineConfig,
-) -> _ModelCapabilitiesLog | None:
+) -> ModelCapabilitiesLog | None:
     architecture = getattr(type(pipeline_config), "architecture", None)
     if architecture is None:
         return None

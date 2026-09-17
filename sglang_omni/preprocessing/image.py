@@ -18,7 +18,7 @@ from .cache_key import compute_media_cache_key
 if TYPE_CHECKING:
     from .resource_connector import MultiModalResourceConnector
 
-_ImageInputT = TypeVar("_ImageInputT")
+ImageInputT = TypeVar("ImageInputT")
 
 
 def load_image_path(path: str | Path) -> Image.Image:
@@ -133,8 +133,8 @@ async def ensure_image_list_async(
 
 
 def build_image_mm_inputs(
-    hf_inputs: Mapping[str, _ImageInputT],
-) -> dict[str, _ImageInputT | None]:
+    hf_inputs: Mapping[str, ImageInputT],
+) -> dict[str, ImageInputT | None]:
     """Extract standard image tensors from HF processor outputs."""
     return {
         "pixel_values": hf_inputs.get("pixel_values"),

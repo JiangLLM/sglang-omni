@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 _MASK_SWAP_LOCK = threading.Lock()
 
 
-class _Tier1Stats(TypedDict):
+class Tier1Stats(TypedDict):
     attempted_key_count: int
     published_key_count: int
     attempts: int
@@ -38,12 +38,12 @@ class _Tier1Stats(TypedDict):
     per_key_footprint_bytes: dict[str, int]
 
 
-class _MemoryStatsRequired(TypedDict):
+class MemoryStatsRequired(TypedDict):
     total_gpu_memory_fraction: float | None
 
 
-class _MemoryStats(_MemoryStatsRequired, total=False):
-    tier1: _Tier1Stats
+class MemoryStats(MemoryStatsRequired, total=False):
+    tier1: Tier1Stats
     before: dict[str, int]
     after: dict[str, int]
     after_rollback: dict[str, int]
@@ -53,14 +53,14 @@ class _MemoryStats(_MemoryStatsRequired, total=False):
     graph_footprint_bytes: int
 
 
-class _BindingStats(TypedDict):
+class BindingStats(TypedDict):
     device: str
     num_quantizers: int
     input_dtype: str
     owner_pid: int
 
 
-class _RuntimeStats(TypedDict):
+class RuntimeStats(TypedDict):
     graph_replays: int
     replay_failures: int
     fallback_counts: dict[str, int]
@@ -69,11 +69,11 @@ class _RuntimeStats(TypedDict):
 class Code2WavGraphStats(TypedDict):
     enabled: bool
     disable_reason: str | None
-    binding: _BindingStats
+    binding: BindingStats
     graph_contract: dict[str, list[dict[str, int]]]
     build: dict[str, int]
-    memory: _MemoryStats
-    runtime: _RuntimeStats
+    memory: MemoryStats
+    runtime: RuntimeStats
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,18 +102,18 @@ class Code2WavRunResult:
     fallback_reason: str | None
 
 
-class _ReplayableGraph(Protocol):
+class ReplayableGraph(Protocol):
     def replay(self) -> object: ...
 
 
 @dataclass(slots=True)
 class _CapturedGraph:
-    graph: _ReplayableGraph
+    graph: ReplayableGraph
     static_input: torch.Tensor
     static_output: torch.Tensor
 
 
-_CaptureAttemptResult: TypeAlias = (
+CaptureAttemptResult: TypeAlias = (
     tuple[Literal["shrink"], list[GraphKey]]
     | tuple[Literal["disable"], tuple[dict[GraphKey, _CapturedGraph], str]]
     | tuple[Literal["published"], tuple[dict[GraphKey, _CapturedGraph], object, object]]
@@ -302,7 +302,7 @@ class Code2WavCudaGraphRunner:
             "attempted_graph_count": 0,
             "published_graph_count": 0,
         }
-        self._memory_stats: _MemoryStats = {"total_gpu_memory_fraction": None}
+        self._memory_stats: MemoryStats = {"total_gpu_memory_fraction": None}
         self._fallback_counts: Counter[str] = Counter()
         self._graph_replays = 0
         self._replay_failures = 0
@@ -337,7 +337,7 @@ class Code2WavCudaGraphRunner:
             return
         self._memory_stats["total_gpu_memory_fraction"] = fraction
 
-        tier1_info: _Tier1Stats = {
+        tier1_info: Tier1Stats = {
             "attempted_key_count": len(self._tier1_keys),
             "published_key_count": 0,
             "attempts": 0,
@@ -438,8 +438,8 @@ class Code2WavCudaGraphRunner:
         before: dict[str, int],
         graph_budget: int,
         tier1_keys: tuple[GraphKey, ...],
-        tier1_info: _Tier1Stats,
-    ) -> _CaptureAttemptResult:
+        tier1_info: Tier1Stats,
+    ) -> CaptureAttemptResult:
         """Capture every requested key into one fresh shared pool.
 
         Tier-1 keys go first, largest-first so the pool's peak blocks are laid

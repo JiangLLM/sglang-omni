@@ -49,7 +49,7 @@ DEFAULT_RESPONSE_FORMATS = frozenset({"json", "text", "verbose_json"})
 DEFAULT_STREAMING_RESPONSE_FORMATS = frozenset({"json", "text"})
 SEGMENT_RESPONSE_FORMATS = frozenset({"srt", "vtt"})
 
-_TaskResultT = TypeVar("_TaskResultT")
+TaskResultT = TypeVar("TaskResultT")
 
 
 @dataclass(frozen=True, slots=True)
@@ -408,7 +408,7 @@ def assemble_speech_to_text_response(
     )
 
 
-async def _cancel_task_bounded(task: asyncio.Task[_TaskResultT]) -> None:
+async def _cancel_task_bounded(task: asyncio.Task[TaskResultT]) -> None:
     task.cancel()
     done, _ = await asyncio.wait({task}, timeout=HTTP_DISCONNECT_CANCEL_TIMEOUT_S)
     if done:
@@ -417,7 +417,7 @@ async def _cancel_task_bounded(task: asyncio.Task[_TaskResultT]) -> None:
         task.add_done_callback(_discard_cancelled_task_result)
 
 
-def _discard_cancelled_task_result(task: asyncio.Task[_TaskResultT]) -> None:
+def _discard_cancelled_task_result(task: asyncio.Task[TaskResultT]) -> None:
     try:
         task.result()
     except asyncio.CancelledError:

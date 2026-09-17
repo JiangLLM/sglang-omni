@@ -13,18 +13,18 @@ if TYPE_CHECKING:
     from sglang_omni.scheduling.sglang_backend.request_data import SGLangARRequestData
     from sglang_omni.scheduling.types import RequestOutput
 
-_MetadataValueT = TypeVar("_MetadataValueT")
+MetadataValueT = TypeVar("MetadataValueT")
 
 DecodeFn = Callable[[list[int]], str]
 BuildMessageDataFn = Callable[[str], object]
-BuildMessageMetadataFn = Callable[[int | None], dict[str, _MetadataValueT] | None]
+BuildMessageMetadataFn = Callable[[int | None], dict[str, MetadataValueT] | None]
 
 
 def make_token_text_stream_output_builder(
     *,
     decode_fn: DecodeFn,
     build_message_data: BuildMessageDataFn,
-    build_message_metadata: BuildMessageMetadataFn[_MetadataValueT],
+    build_message_metadata: BuildMessageMetadataFn[MetadataValueT],
     pending_ids_attr: str,
     last_emit_attr: str,
     eos_token_id: int | None,

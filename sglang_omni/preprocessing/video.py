@@ -27,7 +27,7 @@ from .resource_connector import global_thread_pool
 if TYPE_CHECKING:
     from .resource_connector import MultiModalResourceConnector
 
-_VideoInputValueT = TypeVar("_VideoInputValueT")
+VideoInputValueT = TypeVar("VideoInputValueT")
 
 logger = logging.getLogger(__name__)
 
@@ -392,8 +392,8 @@ def load_video_path(
 
 
 def build_video_mm_inputs(
-    hf_inputs: Mapping[str, _VideoInputValueT],
-) -> dict[str, _VideoInputValueT | None]:
+    hf_inputs: Mapping[str, VideoInputValueT],
+) -> dict[str, VideoInputValueT | None]:
     return {
         "pixel_values_videos": hf_inputs.get("pixel_values_videos"),
         "video_grid_thw": hf_inputs.get("video_grid_thw"),

@@ -9,10 +9,10 @@ import numpy as np
 import torch
 from numpy.typing import ArrayLike
 
-_ReferenceValueT = TypeVar("_ReferenceValueT")
+ReferenceValueT = TypeVar("ReferenceValueT")
 
 
-def audio_data_uri_from_reference(reference: dict[str, _ReferenceValueT]) -> str | None:
+def audio_data_uri_from_reference(reference: dict[str, ReferenceValueT]) -> str | None:
     data = reference.get("data")
     if data is None:
         return None

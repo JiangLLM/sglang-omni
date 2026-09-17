@@ -195,7 +195,7 @@ class _Qwen3TTSDecodePlan:
     chunks: tuple[torch.Tensor, ...] = ()
 
 
-_DecodePlanT = TypeVar("_DecodePlanT", _Qwen3TTSDecodePlan, _IncrementalDecodePlan)
+DecodePlanT = TypeVar("DecodePlanT", _Qwen3TTSDecodePlan, _IncrementalDecodePlan)
 
 
 def _bad_row_message(indices: list[int] | tuple[int, ...]) -> str:
@@ -2608,11 +2608,11 @@ class Qwen3TTSStreamingVocoderScheduler(
 
     @staticmethod
     def _group_decode_plans(
-        planned: list[tuple[str, _Qwen3TTSStreamState, _DecodePlanT]],
-    ) -> list[list[tuple[str, _Qwen3TTSStreamState, _DecodePlanT]]]:
+        planned: list[tuple[str, _Qwen3TTSStreamState, DecodePlanT]],
+    ) -> list[list[tuple[str, _Qwen3TTSStreamState, DecodePlanT]]]:
         groups: dict[
             tuple[int, ...],
-            list[tuple[str, _Qwen3TTSStreamState, _DecodePlanT]],
+            list[tuple[str, _Qwen3TTSStreamState, DecodePlanT]],
         ] = {}
         for entry in planned:
             groups.setdefault(tuple(entry[2].decoder_input.shape), []).append(entry)

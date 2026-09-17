@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     )
 
 
-class _CompletionEvent(Protocol):
+class CompletionEvent(Protocol):
     def query(self) -> bool: ...
 
     def synchronize(self) -> None: ...
@@ -107,7 +107,7 @@ class _PendingStep:
     launch(N+1) writes the other (design.md section 1.4).
     """
 
-    event: _CompletionEvent  # device Event, recorded after post_decode_launch publishes
+    event: CompletionEvent  # device Event, recorded after post_decode_launch publishes
     launch_buf: Any  # post_decode_launch return: device snapshot or host staging
     scheduler_output: (
         SchedulerOutput  # this step's SchedulerOutput (routing + output proc)

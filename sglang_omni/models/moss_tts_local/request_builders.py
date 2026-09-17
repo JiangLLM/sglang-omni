@@ -41,10 +41,10 @@ if TYPE_CHECKING:
         _MossLocalReferenceEncoder,
     )
 
-    _ReferenceEncoder = _BatchedReferenceEncoder | _MossLocalReferenceEncoder
+    ReferenceEncoder = _BatchedReferenceEncoder | _MossLocalReferenceEncoder
 
-_ParamsT = TypeVar("_ParamsT")
-_TTSParamsT = TypeVar("_TTSParamsT")
+ParamsT = TypeVar("ParamsT")
+TTSParamsT = TypeVar("TTSParamsT")
 
 _MOSS_TTS_LOCAL_PREPARED_MARKER = "_moss_tts_local_prepared_request"
 _MOSS_TTS_LOCAL_AUDIO_FRAME_RATE = 12.5
@@ -104,7 +104,7 @@ class MossTTSLocalPreparedRequest:
 @dataclass
 class _PreprocessingContext:
     processor: Any
-    reference_encoder: _ReferenceEncoder | None = None
+    reference_encoder: ReferenceEncoder | None = None
 
 
 _QUEUE: PreparedRequestQueue[_PreprocessingContext, MossTTSLocalPreparedRequest] = (
@@ -114,7 +114,7 @@ MOSS_STREAM_TRANSPORT_BATCH_FRAMES = 5
 
 
 def set_moss_tts_local_preprocessing_context(
-    *, processor: Any, reference_encoder: _ReferenceEncoder | None = None
+    *, processor: Any, reference_encoder: ReferenceEncoder | None = None
 ) -> None:
     _QUEUE.set_context(
         _PreprocessingContext(processor=processor, reference_encoder=reference_encoder)
@@ -180,9 +180,9 @@ def build_moss_tts_local_state(payload: StagePayload) -> MossTTSLocalState:
 
 
 def build_generation_kwargs(
-    params: dict[str, _ParamsT],
+    params: dict[str, ParamsT],
     *,
-    tts_params: dict[str, _TTSParamsT],
+    tts_params: dict[str, TTSParamsT],
 ) -> dict[str, int | float]:
     explicit_generation_params = tts_params.get("explicit_generation_params")
     if isinstance(explicit_generation_params, (list, tuple, set)):
@@ -266,7 +266,7 @@ def build_generation_kwargs(
 def _build_processor_message(
     processor: Any,
     state: MossTTSLocalState,
-    reference_encoder: _ReferenceEncoder | None = None,
+    reference_encoder: ReferenceEncoder | None = None,
 ) -> dict[str, Any]:
     ref_audio = state.ref_audio
     if reference_encoder is not None and isinstance(ref_audio, str):
@@ -290,7 +290,7 @@ def _prepare_moss_tts_local_request(
     payload: StagePayload,
     *,
     processor: Any,
-    reference_encoder: _ReferenceEncoder | None = None,
+    reference_encoder: ReferenceEncoder | None = None,
 ) -> MossTTSLocalPreparedRequest:
     state = build_moss_tts_local_state(payload)
     message = _build_processor_message(processor, state, reference_encoder)

@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 
 CONTINUATION_VERSION = 1
 _TRANSFER_TOMBSTONE_LIMIT = 10000
-_Params = ParamSpec("_Params")
-_ResultT = TypeVar("_ResultT")
-_RequestT = TypeVar("_RequestT")
+Params = ParamSpec("Params")
+ResultT = TypeVar("ResultT")
+RequestT = TypeVar("RequestT")
 
 
 def serialize_kv_allocator(
@@ -50,10 +50,10 @@ def serialize_kv_allocator(
         lock = threading.RLock()
 
     def synchronized(
-        method: Callable[_Params, _ResultT],
-    ) -> Callable[_Params, _ResultT | None]:
+        method: Callable[Params, ResultT],
+    ) -> Callable[Params, ResultT | None]:
         @wraps(method)
-        def call(*args: _Params.args, **kwargs: _Params.kwargs) -> _ResultT | None:
+        def call(*args: Params.args, **kwargs: Params.kwargs) -> ResultT | None:
             with lock:
                 return method(*args, **kwargs)
 
@@ -556,13 +556,13 @@ class DecodeKVReceiver:
             self._closed = True
 
 
-class SGLangKVLease(Generic[_RequestT]):
+class SGLangKVLease(Generic[RequestT]):
     """Keep source pages owned until the receiver ACKs the copy."""
 
     def __init__(
-        self, req: _RequestT | None, due_releases: queue.SimpleQueue[_RequestT]
+        self, req: RequestT | None, due_releases: queue.SimpleQueue[RequestT]
     ) -> None:
-        self._req: _RequestT | None = req
+        self._req: RequestT | None = req
         self._due_releases = due_releases
         self._lock = threading.Lock()
 

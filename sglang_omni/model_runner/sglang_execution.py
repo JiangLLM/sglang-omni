@@ -29,7 +29,7 @@ from typing import Any, Protocol
 import torch
 
 
-class _SpecAlgorithm(Protocol):
+class SpeculativeAlgorithm(Protocol):
     def is_none(self) -> object: ...
 
 
@@ -62,7 +62,7 @@ class SGLangExecutionBridge:
         *,
         device: torch.device,
         worker: Any,
-        spec_algorithm: _SpecAlgorithm,
+        spec_algorithm: SpeculativeAlgorithm,
         future_map: Any,
     ) -> None:
         from sglang.srt.managers.overlap_utils import RelayPayload

@@ -71,7 +71,7 @@ QWEN3_ENCODER_CACHE_MAX_BYTES = 4 * 1024**3
 QWEN3_ENCODER_CACHE_MAX_ENTRIES = 64
 
 
-class _ImageBatchMeta(TypedDict):
+class ImageBatchMeta(TypedDict):
     idx: int
     payload: StagePayload
     state: Qwen3OmniPipelineState
@@ -82,7 +82,7 @@ class _ImageBatchMeta(TypedDict):
     video_token_total: int
 
 
-class _AudioBatchItem(TypedDict):
+class AudioBatchItem(TypedDict):
     idx: int
     payload: StagePayload
     state: Qwen3OmniPipelineState
@@ -93,7 +93,7 @@ class _AudioBatchItem(TypedDict):
     count: int
 
 
-class _ImageEncoderOutput(TypedDict, total=False):
+class ImageEncoderOutput(TypedDict, total=False):
     image_embeds: torch.Tensor | None
     image_grid_thw: torch.Tensor
     image_token_counts: torch.Tensor
@@ -513,7 +513,7 @@ def _batch_image_encoder_payloads(
     image_grids: list[torch.Tensor] = []
     video_pixels: list[torch.Tensor] = []
     video_grids: list[torch.Tensor] = []
-    metas: list[_ImageBatchMeta] = []
+    metas: list[ImageBatchMeta] = []
     merge = model.spatial_merge_size**2
 
     for idx, payload, state, request in active:
@@ -589,9 +589,9 @@ def _batch_image_encoder_payloads(
     image_token_cursor = 0
     video_row_cursor = 0
     video_token_cursor = 0
-    computed_by_cache_key: dict[str, _ImageEncoderOutput] = {}
+    computed_by_cache_key: dict[str, ImageEncoderOutput] = {}
     for meta in metas:
-        stage_result: _ImageEncoderOutput = {}
+        stage_result: ImageEncoderOutput = {}
         if meta["image_rows"] > 0:
             row_end = image_row_cursor + meta["image_rows"]
             token_end = image_token_cursor + meta["image_token_total"]
@@ -778,7 +778,7 @@ def _batch_audio_encoder_payloads(
     if not active:
         return [result for result in results if result is not None]
 
-    normalized: list[_AudioBatchItem] = []
+    normalized: list[AudioBatchItem] = []
     max_time = 0
     for idx, payload, state, request in active:
         features, mask, lengths = _normalize_audio_request_tensors(request)

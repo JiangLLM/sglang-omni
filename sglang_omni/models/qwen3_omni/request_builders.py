@@ -46,14 +46,14 @@ MM_AGGREGATE_STAGE = "mm_aggregate"
 # Note(Chenchen Hong): PyTorch sampling_seed must fit a positive int32.
 MAX_INT32_POSITIVE = 0x7FFFFFFF
 
-_ValueT = TypeVar("_ValueT")
+ValueT = TypeVar("ValueT")
 
 
-class _OptionalTalkerSamplingConfig(TypedDict, total=False):
+class OptionalTalkerSamplingConfig(TypedDict, total=False):
     seed: int | None
 
 
-class _TalkerSamplingConfig(_OptionalTalkerSamplingConfig):
+class TalkerSamplingConfig(OptionalTalkerSamplingConfig):
     max_new_tokens: int
     temperature: float
     top_k: int
@@ -392,10 +392,10 @@ def _copy_mutable_containers(value: object) -> Any:
 
 
 def _select_encoder_inputs(
-    encoder_inputs: dict[str, dict[str, _ValueT]],
+    encoder_inputs: dict[str, dict[str, ValueT]],
     *,
     stage_name: str,
-) -> dict[str, dict[str, _ValueT]]:
+) -> dict[str, dict[str, ValueT]]:
     stage_inputs = encoder_inputs.get(stage_name)
     if not isinstance(stage_inputs, dict):
         return {}
@@ -403,13 +403,13 @@ def _select_encoder_inputs(
 
 
 def _project_encoder_input_metadata(
-    encoder_inputs: dict[str, dict[str, _ValueT]],
-) -> dict[str, dict[str, _ValueT | bool]]:
-    projected: dict[str, dict[str, _ValueT | bool]] = {}
+    encoder_inputs: dict[str, dict[str, ValueT]],
+) -> dict[str, dict[str, ValueT | bool]]:
+    projected: dict[str, dict[str, ValueT | bool]] = {}
     for stage_name, stage_inputs in encoder_inputs.items():
         if not isinstance(stage_inputs, dict):
             continue
-        stage_metadata: dict[str, _ValueT | bool] = {}
+        stage_metadata: dict[str, ValueT | bool] = {}
         cache_key = stage_inputs.get("cache_key")
         if cache_key is not None:
             stage_metadata["cache_key"] = cache_key
@@ -423,7 +423,7 @@ def _project_encoder_input_metadata(
 
 
 def _encoder_stages_with_model_inputs(
-    encoder_inputs: dict[str, _ValueT],
+    encoder_inputs: dict[str, ValueT],
 ) -> list[str]:
     return [
         stage_name
@@ -433,7 +433,7 @@ def _encoder_stages_with_model_inputs(
 
 
 def _active_encoder_stages(
-    encoder_inputs: dict[str, _ValueT],
+    encoder_inputs: dict[str, ValueT],
 ) -> list[str]:
     return [
         stage_name
@@ -467,10 +467,10 @@ def _has_encoder_model_input(stage_name: str, stage_inputs: object) -> bool:
 
 
 def _select_present_fields(
-    source: dict[str, _ValueT],
+    source: dict[str, ValueT],
     keys: tuple[str, ...],
-) -> dict[str, _ValueT]:
-    selected: dict[str, _ValueT] = {}
+) -> dict[str, ValueT]:
+    selected: dict[str, ValueT] = {}
     for key in keys:
         value = source.get(key)
         if value is not None:
@@ -487,7 +487,7 @@ def _single_encoder_stage_name(state: Qwen3OmniPipelineState) -> str:
 
 
 def _extract_thinker_model_inputs(
-    thinker_inputs: dict[str, _ValueT],
+    thinker_inputs: dict[str, ValueT],
 ) -> dict[str, Any]:
     """Return the model input payload without confusing an empty payload for absence.
 
@@ -513,7 +513,7 @@ def _extract_thinker_model_inputs(
 def build_thinker_request(
     state: Qwen3OmniPipelineState,
     *,
-    params: dict[str, _ValueT],
+    params: dict[str, ValueT],
 ) -> ARRequestData:
     prompt = state.prompt
     input_ids = prompt["input_ids"]
@@ -764,7 +764,7 @@ def build_sglang_talker_request(
     tts_pad_embed: torch.Tensor | None = None,
     thinker_chunks_done: bool = True,
     thinker_config: Qwen3OmniMoeThinkerConfig | None = None,
-    talker_model_inputs: dict[str, _ValueT] | None = None,
+    talker_model_inputs: dict[str, ValueT] | None = None,
     seed: int | None = None,
 ) -> "SGLangARRequestData":
     """Build SGLang AR request for the Talker from thinker hidden states.
@@ -1113,7 +1113,7 @@ def make_talker_scheduler_adapters(
 
     def _resolve_talker_sampling_config(
         params: dict[str, Any],
-    ) -> _TalkerSamplingConfig:
+    ) -> TalkerSamplingConfig:
         codec_eos_id = int(getattr(model.config, "codec_eos_token_id", -1))
         suppress_tokens = [
             token_id
@@ -1172,7 +1172,7 @@ def _build_talker_request_data(
     image_token_id: int | None,
     video_token_id: int | None,
     thinker_config: Qwen3OmniMoeThinkerConfig | None,
-    resolve_sampling_config: Callable[[dict[str, Any]], _TalkerSamplingConfig],
+    resolve_sampling_config: Callable[[dict[str, Any]], TalkerSamplingConfig],
 ) -> SGLangARRequestData:
     params = payload.request.params
     sampling_cfg = resolve_sampling_config(params)

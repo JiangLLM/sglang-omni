@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from typing import Any, TypeVar
 
-_ValueT = TypeVar("_ValueT")
+ValueT = TypeVar("ValueT")
 
 
-def build_ming_sampling_kwargs(params: dict[str, _ValueT]) -> dict[str, Any]:
+def build_ming_sampling_kwargs(params: dict[str, ValueT]) -> dict[str, Any]:
     return {
         "max_new_tokens": params.get("max_new_tokens", 2048),
         "temperature": params.get("temperature", 0.0),

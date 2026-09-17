@@ -232,7 +232,7 @@ class _CosyVoice3ReferenceArtifact:
     flow_embedding: torch.Tensor
 
 
-class _CosyVoice3StoredReference(TypedDict):
+class CosyVoice3StoredReference(TypedDict):
     artifact_type: Literal["fun_cosyvoice3_reference_conditioning"]
     llm_prompt_speech_token: torch.Tensor
     flow_prompt_speech_token: torch.Tensor
@@ -244,7 +244,7 @@ class _CosyVoice3ReferenceEncodeHook(
     KeyedReferenceEncodeHook[
         _CosyVoice3ReferenceInput,
         _CosyVoice3ReferenceArtifact,
-        _CosyVoice3StoredReference,
+        CosyVoice3StoredReference,
     ]
 ):
     model_id = "fun_cosyvoice3"
@@ -325,7 +325,7 @@ class _CosyVoice3ReferenceEncodeHook(
 
     def store_artifact(
         self, artifact: _CosyVoice3ReferenceArtifact
-    ) -> _CosyVoice3StoredReference:
+    ) -> CosyVoice3StoredReference:
         return {
             "artifact_type": "fun_cosyvoice3_reference_conditioning",
             "llm_prompt_speech_token": _clone_reference_tensor(
@@ -341,7 +341,7 @@ class _CosyVoice3ReferenceEncodeHook(
         }
 
     def load_artifact(
-        self, stored: dict[str, Any] | _CosyVoice3StoredReference
+        self, stored: dict[str, Any] | CosyVoice3StoredReference
     ) -> _CosyVoice3ReferenceArtifact:
         if stored.get("artifact_type") != "fun_cosyvoice3_reference_conditioning":
             raise RuntimeError("CosyVoice3 reference cache entry is invalid")
@@ -368,7 +368,7 @@ class CosyVoice3PreprocessingContext:
     reference_service: ReferenceEncodeService[
         _CosyVoice3ReferenceInput,
         _CosyVoice3ReferenceArtifact,
-        _CosyVoice3StoredReference,
+        CosyVoice3StoredReference,
     ]
 
 

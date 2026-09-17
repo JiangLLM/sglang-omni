@@ -9,7 +9,7 @@ from typing import Any, TypeVar
 
 import msgspec
 
-_Value = TypeVar("_Value")
+DataRefValueT = TypeVar("DataRefValueT")
 
 
 class TransportKind(str, Enum):
@@ -55,7 +55,7 @@ class TensorMeta(msgspec.Struct, frozen=True):
         }
 
     @classmethod
-    def from_dict(cls, value: dict[str, _Value]) -> "TensorMeta":
+    def from_dict(cls, value: dict[str, DataRefValueT]) -> "TensorMeta":
         return cls(
             path=_required(value, "path", str),
             shape=_int_tuple(value, "shape"),
@@ -73,7 +73,7 @@ class BackendRef(msgspec.Struct, frozen=True):
 
     @classmethod
     def from_relay_info(
-        cls, *, transport: TransportKind, relay_info: dict[str, _Value]
+        cls, *, transport: TransportKind, relay_info: dict[str, DataRefValueT]
     ) -> "BackendRef":
         transfer_info = _required(relay_info, "transfer_info", dict)
         return cls(
@@ -90,7 +90,7 @@ class BackendRef(msgspec.Struct, frozen=True):
         }
 
     @classmethod
-    def from_dict(cls, value: dict[str, _Value]) -> "BackendRef":
+    def from_dict(cls, value: dict[str, DataRefValueT]) -> "BackendRef":
         return cls(
             transport=TransportKind(_required(value, "transport", str)),
             info=_required(value, "info", dict),
@@ -106,7 +106,7 @@ class MetadataTensorRef(msgspec.Struct, frozen=True):
         return {"path": self.path, "ref": self.ref.to_dict()}
 
     @classmethod
-    def from_dict(cls, value: dict[str, _Value]) -> "MetadataTensorRef":
+    def from_dict(cls, value: dict[str, DataRefValueT]) -> "MetadataTensorRef":
         return cls(
             path=_required(value, "path", str),
             ref=DataRef.from_dict(_required(value, "ref", dict)),
@@ -191,7 +191,9 @@ class DataRef(msgspec.Struct, frozen=True):
         )
 
 
-def _required(value: Mapping[str, object], key: str, expected: type[_Value]) -> _Value:
+def _required(
+    value: Mapping[str, object], key: str, expected: type[DataRefValueT]
+) -> DataRefValueT:
     item = value[key]
     if type(item) is not expected:
         raise TypeError(f"{key} must be {expected.__name__}, got {type(item).__name__}")
@@ -199,8 +201,8 @@ def _required(value: Mapping[str, object], key: str, expected: type[_Value]) -> 
 
 
 def _optional(
-    value: Mapping[str, object], key: str, expected: type[_Value]
-) -> _Value | None:
+    value: Mapping[str, object], key: str, expected: type[DataRefValueT]
+) -> DataRefValueT | None:
     item = value.get(key)
     if item is None:
         return None

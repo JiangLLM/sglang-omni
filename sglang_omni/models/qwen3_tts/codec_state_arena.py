@@ -20,13 +20,13 @@ if TYPE_CHECKING:
     )
 
 
-class _DisabledCodecGraphStats(TypedDict):
+class DisabledCodecGraphStats(TypedDict):
     enabled: bool
 
 
-class _CodecCudaGraphStats(TypedDict):
-    cold: IncrementalCodecGraphStats | _DisabledCodecGraphStats
-    window: IncrementalCodecGraphStats | _DisabledCodecGraphStats
+class CodecCudaGraphStats(TypedDict):
+    cold: IncrementalCodecGraphStats | DisabledCodecGraphStats
+    window: IncrementalCodecGraphStats | DisabledCodecGraphStats
     warm: list[IncrementalCodecGraphStats]
 
 
@@ -40,7 +40,7 @@ class CodecStateStats(TypedDict, total=False):
     exhausted: int
     enabled: bool
     left_context_fallbacks: int
-    cuda_graphs: _CodecCudaGraphStats
+    cuda_graphs: CodecCudaGraphStats
 
 
 class Qwen3TTSCodecStateArena:

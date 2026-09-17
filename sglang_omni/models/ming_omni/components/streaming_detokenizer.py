@@ -51,10 +51,10 @@ _DONE_SEEN_EVICT_TO = 5000
 _STATE_MAX = 10000
 _STATE_ORPHAN_IDLE_S = 300.0
 
-_ThinkerValueT = TypeVar("_ThinkerValueT")
+ThinkerValueT = TypeVar("ThinkerValueT")
 
 
-class _StreamChunkData(Protocol):
+class StreamChunkData(Protocol):
     @property
     def data(self) -> object: ...
 
@@ -156,7 +156,7 @@ class MingStreamingDetokenizeScheduler:
                 _STATE_MAX,
             )
 
-    def _on_stream_chunk(self, request_id: str, item: _StreamChunkData) -> None:
+    def _on_stream_chunk(self, request_id: str, item: StreamChunkData) -> None:
         # item is the StreamItem the runtime wraps around the thinker's
         # torch.tensor([token_id], dtype=torch.long)
         data = item.data
@@ -341,7 +341,7 @@ def text_output_requested(request: OmniRequest) -> bool:
 def _attach_decode_final_metadata(
     result: dict[str, Any],
     state: MingOmniPipelineState,
-    thinker_out: dict[str, _ThinkerValueT],
+    thinker_out: dict[str, ThinkerValueT],
 ) -> None:
     finish_reason = thinker_out.get("finish_reason")
     if finish_reason is not None:

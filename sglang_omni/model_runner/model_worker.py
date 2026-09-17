@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_PayloadValueT = TypeVar("_PayloadValueT")
+PayloadValueT = TypeVar("PayloadValueT")
 
 
 @dataclass
@@ -50,7 +50,7 @@ class _PrefillCudaGraphUsage:
     replay_buckets: Counter[int] = field(default_factory=Counter)
 
 
-class _PrefillCudaGraphInfo(TypedDict):
+class PrefillCudaGraphInfo(TypedDict):
     backend: object
     runner: str | None
     backend_runner: str | None
@@ -350,7 +350,7 @@ class ModelWorker:
         """Record a custom prefill forward that bypasses SGLang graph dispatch."""
         self._prefill_cuda_graph_usage.custom_eager_count += 1
 
-    def _prefill_cuda_graph_info(self) -> _PrefillCudaGraphInfo:
+    def _prefill_cuda_graph_info(self) -> PrefillCudaGraphInfo:
         from sglang.srt.model_executor.runner.prefill_cuda_graph_runner import (
             PrefillCudaGraphRunner,
         )
@@ -421,7 +421,7 @@ class ModelWorker:
         return bool(success), str(message)
 
     def update_weights_from_tensor(
-        self, payload: dict[str, _PayloadValueT]
+        self, payload: dict[str, PayloadValueT]
     ) -> tuple[bool, str]:
         if payload.get("serialized_named_tensors") is not None:
             return (
@@ -507,7 +507,7 @@ class ModelWorker:
     def _call_optional_weight_method(
         self,
         method_name: str,
-        payload: dict[str, _PayloadValueT],
+        payload: dict[str, PayloadValueT],
     ) -> tuple[bool, str]:
         method = getattr(self.model_runner, method_name)
         recv_req = SimpleNamespace(**payload)

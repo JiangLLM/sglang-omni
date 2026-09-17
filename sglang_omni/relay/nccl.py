@@ -17,25 +17,25 @@ logger = logging.getLogger(__name__)
 
 NIXL_AVAILABLE = dist.is_available()
 
-_MetadataT = TypeVar("_MetadataT")
+NcclMetadataT = TypeVar("NcclMetadataT")
 
 
-class _AgentMetadata(TypedDict):
+class NcclAgentMetadata(TypedDict):
     rank: int
     engine_id: str
 
 
-class _TransferInfo(TypedDict):
+class NcclTransferInfo(TypedDict):
     size: int
     device_id: int
     shape: list[int]
     dtype: str
 
 
-class _PutMetadata(TypedDict):
+class NcclPutMetadata(TypedDict):
     engine_id: str
-    agent_meta: _AgentMetadata
-    transfer_info: _TransferInfo
+    agent_meta: NcclAgentMetadata
+    transfer_info: NcclTransferInfo
 
 
 class Connection:
@@ -89,7 +89,7 @@ class Connection:
             f"[{engine_id}] Connection initialized. Rank: {rank}, Send->{send_ranks}, Recv<-{recv_ranks}"
         )
 
-    def get_agent_metadata(self) -> _AgentMetadata:
+    def get_agent_metadata(self) -> NcclAgentMetadata:
         return {"rank": self.rank, "engine_id": self.name}
 
     def ensure_remote_agent(self, remote_engine_id: str, remote_meta_bytes: Any) -> int:
@@ -101,7 +101,7 @@ class Connection:
         return target_rank
 
 
-class NcclOperation(RelayOperation, Generic[_MetadataT]):
+class NcclOperation(RelayOperation, Generic[NcclMetadataT]):
     """
     Base class for NCCL async operations.
     """
@@ -111,7 +111,7 @@ class NcclOperation(RelayOperation, Generic[_MetadataT]):
         connection: Connection,
         work_handle: dist.Work | None,
         tensor_ref: object,
-        metadata: _MetadataT | None = None,
+        metadata: NcclMetadataT | None = None,
     ) -> None:
         self._conn = connection
         self._work = work_handle
@@ -120,11 +120,11 @@ class NcclOperation(RelayOperation, Generic[_MetadataT]):
         self._completed = False
 
     @property
-    def metadata(self) -> _MetadataT | None:
+    def metadata(self) -> NcclMetadataT | None:
         return self._metadata
 
 
-class PutOperation(NcclOperation[_MetadataT]):
+class PutOperation(NcclOperation[NcclMetadataT]):
     """Handle for a Put operation (NCCL isend)."""
 
     def __init__(
@@ -132,7 +132,7 @@ class PutOperation(NcclOperation[_MetadataT]):
         connection: Connection,
         work_handle: dist.Work | None,
         tensor_ref: torch.Tensor,
-        metadata: _MetadataT,
+        metadata: NcclMetadataT,
         on_completion_cb: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(connection, work_handle, tensor_ref, metadata)
@@ -267,7 +267,7 @@ class NcclRelay(Relay):
         request_id: str | None = None,
         dst_rank: int | None = None,
         receiver_id: str | None = None,
-    ) -> PutOperation[_PutMetadata]:
+    ) -> PutOperation[NcclPutMetadata]:
         if dst_rank is None:
             if len(self.connection.send_ranks) == 1:
                 dst_rank = self.connection.send_ranks[0]
@@ -287,7 +287,7 @@ class NcclRelay(Relay):
             tensor=tensor, dst=dst_rank, group=self.connection.group
         )
 
-        payload: _PutMetadata = {
+        payload: NcclPutMetadata = {
             "engine_id": self.engine_id,
             "agent_meta": self.connection.get_agent_metadata(),
             "transfer_info": {

@@ -50,7 +50,7 @@ _STEADY_BATCH_MAX = 8
 _LARGE_BATCH_MAX_FRAMES = 20
 
 
-class _IngestProfile(TypedDict):
+class IngestProfile(TypedDict):
     run_id: object
     messages: int
     accepted_frames: int
@@ -61,17 +61,17 @@ class _IngestProfile(TypedDict):
     ready_emitted: bool
 
 
-class _ExecutionMetadata(TypedDict):
+class ExecutionMetadata(TypedDict):
     execution_mode: str
     graph_key: dict[str, int] | None
     fallback_reason: str | None
 
 
-class _SubBatchExecutionMetadata(_ExecutionMetadata):
+class SubBatchExecutionMetadata(ExecutionMetadata):
     batch_size: int
 
 
-class _BatchProfile(TypedDict):
+class BatchProfile(TypedDict):
     batch_id: int
     participant_request_ids: list[str]
     first_audio_request_ids: list[str]
@@ -202,7 +202,7 @@ class Code2WavStreamState:
     due_since: float | None = None
     checked: int = 0
     pending: _PendingWindow | None = None
-    _critical_ingest_profile: _IngestProfile | None = None
+    _critical_ingest_profile: IngestProfile | None = None
 
 
 class Code2WavScheduler(StreamingVocoderBase[Code2WavStreamState, "list[int]"]):
@@ -348,12 +348,12 @@ class Code2WavScheduler(StreamingVocoderBase[Code2WavStreamState, "list[int]"]):
 
     def _start_ingest_profile(
         self, state: Code2WavStreamState
-    ) -> tuple[_IngestProfile, int, int, int] | None:
+    ) -> tuple[IngestProfile, int, int, int] | None:
         """Called only with event recording active; stop timing after first readiness."""
         if state.emitted > 0:
             return None
         run_id = _get_event_recorder().active_run_id()
-        profile: _IngestProfile | None = state._critical_ingest_profile
+        profile: IngestProfile | None = state._critical_ingest_profile
         if profile is None or profile["run_id"] != run_id:
             profile = {
                 "run_id": run_id,
@@ -374,7 +374,7 @@ class Code2WavScheduler(StreamingVocoderBase[Code2WavStreamState, "list[int]"]):
         self,
         request_id: str,
         state: Code2WavStreamState,
-        context: tuple[_IngestProfile, int, int, int],
+        context: tuple[IngestProfile, int, int, int],
     ) -> None:
         # Note (wenyao): Adding a GPU fence here would make profiling serialize
         # the asynchronous ingestion path it is measuring.
@@ -737,7 +737,7 @@ class Code2WavScheduler(StreamingVocoderBase[Code2WavStreamState, "list[int]"]):
         codes: torch.Tensor,
         *,
         graph_eligible: bool = False,
-    ) -> tuple[torch.Tensor, _ExecutionMetadata]:
+    ) -> tuple[torch.Tensor, ExecutionMetadata]:
         with torch.no_grad():
             if self._device.type != "cpu":
                 torch.get_device_module(self._device).set_device(self._device)
@@ -1042,7 +1042,7 @@ class Code2WavScheduler(StreamingVocoderBase[Code2WavStreamState, "list[int]"]):
         plan: list[int],
     ) -> dict[str, torch.Tensor]:
         decoded: dict[str, torch.Tensor] = {}
-        profile_metadata: _BatchProfile | None = None
+        profile_metadata: BatchProfile | None = None
         if _get_recorder().is_active():
             self._critical_batch_id = getattr(self, "_critical_batch_id", 0) + 1
             first_state = participants[0][1]
@@ -1075,7 +1075,7 @@ class Code2WavScheduler(StreamingVocoderBase[Code2WavStreamState, "list[int]"]):
             "graph_key": None,
             "fallback_reason": None,
         }
-        sub_batch_execution: list[_SubBatchExecutionMetadata] = []
+        sub_batch_execution: list[SubBatchExecutionMetadata] = []
         audio_samples = 0
         cursor = 0
         for sub in plan:
@@ -1125,7 +1125,7 @@ class Code2WavScheduler(StreamingVocoderBase[Code2WavStreamState, "list[int]"]):
         self,
         group: list[tuple[str, Code2WavStreamState]],
         decoded: dict[str, torch.Tensor],
-    ) -> tuple[int, _ExecutionMetadata]:
+    ) -> tuple[int, ExecutionMetadata]:
         """Decode one sub-batch and advance its participants; returns the audio
         sample count and the execution metadata of the forward."""
         rows = []

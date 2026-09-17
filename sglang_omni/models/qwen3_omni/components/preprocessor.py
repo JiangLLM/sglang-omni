@@ -42,7 +42,7 @@ from sglang_omni.proto import StagePayload
 logger = logging.getLogger(__name__)
 
 
-class _VideoProcessorKwargs(TypedDict, total=False):
+class VideoProcessorKwargs(TypedDict, total=False):
     fps: float | list[float]
     max_frames: int
     min_pixels: int
@@ -54,8 +54,8 @@ class _VideoProcessorKwargs(TypedDict, total=False):
     device: str
 
 
-class _ProcessorKwargs(TypedDict, total=False):
-    videos_kwargs: _VideoProcessorKwargs
+class ProcessorKwargs(TypedDict, total=False):
+    videos_kwargs: VideoProcessorKwargs
 
 
 _TRAIN_INPUT_TENSOR_NAMES = frozenset(
@@ -629,7 +629,7 @@ class Qwen3OmniPreprocessor:
             tokenize=False,
         )
 
-        videos_kwargs: _VideoProcessorKwargs = {}
+        videos_kwargs: VideoProcessorKwargs = {}
         if sampled_video_fps is not None:
             videos_kwargs["fps"] = (
                 sampled_video_fps[0]
@@ -657,7 +657,7 @@ class Qwen3OmniPreprocessor:
         if videos:
             # torchcodec backend expects a non-None device string
             videos_kwargs.setdefault("device", "cpu")
-        processor_kwargs: _ProcessorKwargs = {}
+        processor_kwargs: ProcessorKwargs = {}
         if videos_kwargs:
             processor_kwargs["videos_kwargs"] = videos_kwargs
 

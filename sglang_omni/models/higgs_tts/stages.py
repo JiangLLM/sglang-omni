@@ -179,7 +179,7 @@ class _HiggsReferenceInput:
         self.content_key = content_key
 
 
-class _ReferenceAudioCodec(Protocol):
+class ReferenceAudioCodec(Protocol):
     def encode_reference(
         self, waveform: torch.Tensor, /, *, sample_rate: int
     ) -> torch.Tensor: ...
@@ -195,7 +195,7 @@ class _HiggsReferenceEncodeHook(TensorReferenceEncodeHook[_HiggsReferenceInput])
     output_dtype = torch.long
 
     def __init__(
-        self, codec: _ReferenceAudioCodec, *, num_codebooks: int, model_identity: str
+        self, codec: ReferenceAudioCodec, *, num_codebooks: int, model_identity: str
     ) -> None:
         self._codec = codec
         self._num_codebooks = int(num_codebooks)

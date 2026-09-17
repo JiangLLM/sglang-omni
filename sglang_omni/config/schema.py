@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 REPLICA_SEPARATOR = "@r"
 
-_ConfigValueT = TypeVar("_ConfigValueT")
+ConfigValueT = TypeVar("ConfigValueT")
 
 
 @dataclass(frozen=True, slots=True)
@@ -995,5 +995,5 @@ class PipelineConfig(BaseModel):
             )
 
     @staticmethod
-    def from_dict(data: dict[str, _ConfigValueT]) -> PipelineConfig:
+    def from_dict(data: dict[str, ConfigValueT]) -> PipelineConfig:
         return PipelineConfig(**data)

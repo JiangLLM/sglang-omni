@@ -35,9 +35,9 @@ if TYPE_CHECKING:
     )
     from sglang_omni.scheduling.types import RequestOutput
 
-_MetadataValueT = TypeVar("_MetadataValueT")
-_SamplingValueT = TypeVar("_SamplingValueT")
-_SamplingResultT = TypeVar("_SamplingResultT")
+MetadataValueT = TypeVar("MetadataValueT")
+SamplingValueT = TypeVar("SamplingValueT")
+SamplingResultT = TypeVar("SamplingResultT")
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ def _unwrap_source_dict(source: object) -> object:
     return source
 
 
-def _explicit_generation_fields(metadata: dict[str, _MetadataValueT]) -> set[str]:
+def _explicit_generation_fields(metadata: dict[str, MetadataValueT]) -> set[str]:
     """Sampling fields the caller set explicitly (see EXPLICIT_GENERATION_PARAMS_KEY).
 
     Anything not listed here resolves to the model's own default, so a client
@@ -159,12 +159,12 @@ def _explicit_generation_fields(metadata: dict[str, _MetadataValueT]) -> set[str
 
 
 def _sampling_param(
-    params: dict[str, _SamplingValueT],
+    params: dict[str, SamplingValueT],
     explicit_fields: set[str],
     field: str,
-    default: _SamplingResultT,
-    cast: Callable[[Any], _SamplingResultT],
-) -> _SamplingResultT:
+    default: SamplingResultT,
+    cast: Callable[[Any], SamplingResultT],
+) -> SamplingResultT:
     if field not in explicit_fields:
         return default
     value = params.get(field)

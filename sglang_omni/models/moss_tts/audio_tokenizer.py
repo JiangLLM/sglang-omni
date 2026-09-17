@@ -51,7 +51,7 @@ from sglang_omni.utils.json import JsonValue
 
 logger = logging.getLogger(__name__)
 
-_MossAudioPathT = TypeVar("_MossAudioPathT", bound=str | PathLike[str])
+MossAudioPathT = TypeVar("MossAudioPathT", bound=str | PathLike[str])
 
 DEFAULT_MOSS_TTS_AUDIO_TOKENIZER = "OpenMOSS-Team/MOSS-Audio-Tokenizer"
 DEFAULT_MOSS_TTS_LOCAL_AUDIO_TOKENIZER = "OpenMOSS-Team/MOSS-Audio-Tokenizer-v2"
@@ -142,7 +142,7 @@ def _feed_forward(module: nn.Module) -> nn.Module:
     )
 
 
-class _AttentionKwargs(TypedDict, total=False):
+class AttentionKwargs(TypedDict, total=False):
     cu_seqlens: torch.Tensor | None
     max_seqlen: int | None
     position_ids: torch.Tensor | None
@@ -318,7 +318,7 @@ class MossAudioTokenizerTransformerLayer(nn.Module):
         )
 
     def forward(
-        self, x: torch.Tensor, **kwargs: Unpack[_AttentionKwargs]
+        self, x: torch.Tensor, **kwargs: Unpack[AttentionKwargs]
     ) -> torch.Tensor:
         residual = x
         x = self.norm1(x)
@@ -1560,7 +1560,7 @@ class MossAudioEncoder:
 
     def encode_paths(
         self,
-        paths: list[_MossAudioPathT],
+        paths: list[MossAudioPathT],
         *,
         num_quantizers: int,
     ) -> list[torch.Tensor]:
@@ -1573,7 +1573,7 @@ class MossAudioEncoder:
 
     def load_paths(
         self,
-        paths: list[_MossAudioPathT],
+        paths: list[MossAudioPathT],
     ) -> list[tuple[torch.Tensor, int]]:
         import torchaudio
 

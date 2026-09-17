@@ -19,12 +19,12 @@ from sglang_omni.utils.gpu_memory import (
     parse_cuda_visible_devices,
 )
 
-_IndexDevice = TypeVar("_IndexDevice", bound=Mapping[str, object])
-_UuidDevice = TypeVar("_UuidDevice", bound=Mapping[str, object])
-_InventoryDevice = TypeVar("_InventoryDevice", bound=Mapping[str, object])
+IndexDevice = TypeVar("IndexDevice", bound=Mapping[str, object])
+UuidDevice = TypeVar("UuidDevice", bound=Mapping[str, object])
+InventoryDevice = TypeVar("InventoryDevice", bound=Mapping[str, object])
 
 
-class _BackendInfo(TypedDict):
+class BackendInfo(TypedDict):
     category: str
     name: str
     distribution: str | None
@@ -123,8 +123,8 @@ def _distribution_info(module: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _backend_inventory() -> list[_BackendInfo]:
-    backends: list[_BackendInfo] = []
+def _backend_inventory() -> list[BackendInfo]:
+    backends: list[BackendInfo] = []
     for category, name, module in _BACKENDS:
         import_error = _module_import_error(module)
         distribution, version = _distribution_info(module)
@@ -261,9 +261,9 @@ def _physical_device(
     logical_index: int,
     properties: object,
     visible_devices: list[int | str],
-    by_index: dict[int, _IndexDevice],
-    by_uuid: dict[str, _UuidDevice],
-) -> _IndexDevice | _UuidDevice | dict[str, None]:
+    by_index: dict[int, IndexDevice],
+    by_uuid: dict[str, UuidDevice],
+) -> IndexDevice | UuidDevice | dict[str, None]:
     torch_uuid = _normalize_uuid(getattr(properties, "uuid", None))
     if torch_uuid in by_uuid:
         return by_uuid[torch_uuid]
@@ -280,7 +280,7 @@ def _physical_device(
 def _logical_devices(
     torch: Any,
     visible_devices: list[int | str],
-    inventory: list[_InventoryDevice],
+    inventory: list[InventoryDevice],
     warnings: list[str],
 ) -> list[dict[str, Any]]:
     if not torch.cuda.is_available():

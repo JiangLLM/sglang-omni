@@ -45,7 +45,7 @@ _FORCED_CODES_DIR_ENV = "MINIMAX_MUSIC3_FORCED_CODES"
 _HIDDEN_DUMP_DIR_ENV = "MINIMAX_MUSIC3_HIDDEN_DUMP"
 
 
-class _HiddenChunkMetadata(TypedDict):
+class HiddenChunkMetadata(TypedDict):
     stream: bool
     modality: Literal["ttm_hidden"]
     chunk_idx: int
@@ -55,7 +55,7 @@ class _HiddenChunkMetadata(TypedDict):
     seed: int
 
 
-class _MiniMaxMusic3Model(Protocol):
+class MiniMaxMusic3Model(Protocol):
     @property
     def graph_feedback_buffer(self) -> torch.Tensor | None: ...
 
@@ -118,7 +118,7 @@ class _ARState:
     generated_frames: int = 0
     finish_reason: str = "length"
     started_s: float = 0.0
-    pending_chunks: list[tuple[torch.Tensor, _HiddenChunkMetadata]] = field(
+    pending_chunks: list[tuple[torch.Tensor, HiddenChunkMetadata]] = field(
         default_factory=list
     )
 
@@ -126,7 +126,7 @@ class _ARState:
 class MiniMaxMusic3ModelRunner(ModelRunner):
     """Own c0 sampling, RVQ depth decode and FM8 chunk streaming."""
 
-    model: _MiniMaxMusic3Model
+    model: MiniMaxMusic3Model
     tp_worker: ModelWorker
 
     def __init__(

@@ -9,7 +9,7 @@ from typing import Any, Mapping, Protocol
 from transformers.utils.hub import cached_file
 
 
-class _ChatTemplateHolder(Protocol):
+class ChatTemplateHolder(Protocol):
     @property
     def chat_template(self) -> object: ...
 
@@ -42,7 +42,7 @@ def load_chat_template(model_path: str, *, local_files_only: bool = True) -> str
 
 
 def ensure_chat_template(
-    tokenizer: _ChatTemplateHolder,
+    tokenizer: ChatTemplateHolder,
     *,
     model_path: str,
     fallback_model_paths: tuple[str, ...] = (),

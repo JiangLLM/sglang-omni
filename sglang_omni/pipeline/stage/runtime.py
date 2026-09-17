@@ -68,9 +68,9 @@ logger = logging.getLogger(__name__)
 _SCHEDULER_THREAD_JOIN_TIMEOUT_S = 5.0
 _OUTBOX_DRAIN_BATCH_SIZE = 64
 
-_CommConfigValueT = TypeVar("_CommConfigValueT")
-_AdminDataValueT = TypeVar("_AdminDataValueT")
-_TaskResultT = TypeVar("_TaskResultT")
+CommConfigValueT = TypeVar("CommConfigValueT")
+AdminDataValueT = TypeVar("AdminDataValueT")
+TaskResultT = TypeVar("TaskResultT")
 
 GetNextFn = Callable[[str, Any], str | list[str] | None]
 GetStreamDoneTargetsFn = Callable[[str, Any], str | list[str] | None]
@@ -111,7 +111,7 @@ class Stage:
         placement_gpu_id: int | None = None,
         input_handler: InputHandler | None = None,
         relay: Relay | None = None,
-        comm_config: dict[str, _CommConfigValueT] | None = None,
+        comm_config: dict[str, CommConfigValueT] | None = None,
         scheduler: Any = None,
         project_payload: dict[str, Callable[[Any], Any]] | None = None,
         stream_targets: list[str] | None = None,
@@ -1099,7 +1099,7 @@ class Stage:
         *,
         success: bool,
         message: str = "",
-        data: dict[str, _AdminDataValueT] | None = None,
+        data: dict[str, AdminDataValueT] | None = None,
         error: str | None = None,
     ) -> AdminResult:
         return AdminResult(
@@ -1944,7 +1944,7 @@ class Stage:
             recorder.stop(run_id=msg.run_id)
 
     def _on_background_task_done(
-        self, task: asyncio.Task[_TaskResultT], label: str
+        self, task: asyncio.Task[TaskResultT], label: str
     ) -> None:
         if task.cancelled():
             return

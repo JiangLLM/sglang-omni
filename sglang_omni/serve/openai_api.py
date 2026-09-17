@@ -135,9 +135,9 @@ logger = logging.getLogger(__name__)
 HTTP_DISCONNECT_POLL_INTERVAL_S = 0.05
 HTTP_DISCONNECT_CANCEL_TIMEOUT_S = 0.1
 
-_ValueT = TypeVar("_ValueT")
-_ModelInfoT = TypeVar("_ModelInfoT", bound=Mapping[str, object])
-_TaskResultT = TypeVar("_TaskResultT")
+ValueT = TypeVar("ValueT")
+ModelInfoT = TypeVar("ModelInfoT", bound=Mapping[str, object])
+TaskResultT = TypeVar("TaskResultT")
 
 
 class _RequestBodyTooLarge(Exception):
@@ -385,7 +385,7 @@ async def _read_voice_upload(audio_sample: UploadFile) -> bytes:
     return audio_bytes
 
 
-def _is_voice_upload_scope(scope: dict[str, _ValueT]) -> bool:
+def _is_voice_upload_scope(scope: dict[str, ValueT]) -> bool:
     return (
         scope.get("type") == "http"
         and scope.get("method") == "POST"
@@ -604,7 +604,7 @@ def _request_payload(req: AdminRequestBase) -> dict[str, Any]:
     return req.model_dump(exclude={"stages", "timeout_s"}, exclude_none=True)
 
 
-def _admin_response(result: dict[str, _ValueT] | AdminResponse) -> JSONResponse:
+def _admin_response(result: dict[str, ValueT] | AdminResponse) -> JSONResponse:
     if not result.get("success", False):
         raise HTTPException(status_code=400, detail=result)
     return JSONResponse(content=result)
@@ -654,7 +654,7 @@ def _extract_model_info_stage_data(
 
 def _common_model_info_value(
     result: object,
-    stage_infos: list[_ModelInfoT],
+    stage_infos: list[ModelInfoT],
     key: str,
     *,
     mixed_status_code: int | None = None,
@@ -1634,7 +1634,7 @@ async def _await_speech_response(
             await _cancel_task_bounded(disconnect_task)
 
 
-async def _cancel_task_bounded(task: asyncio.Task[_TaskResultT]) -> None:
+async def _cancel_task_bounded(task: asyncio.Task[TaskResultT]) -> None:
     task.cancel()
     done, _ = await asyncio.wait({task}, timeout=HTTP_DISCONNECT_CANCEL_TIMEOUT_S)
     if done:
@@ -1643,7 +1643,7 @@ async def _cancel_task_bounded(task: asyncio.Task[_TaskResultT]) -> None:
         task.add_done_callback(_discard_cancelled_task_result)
 
 
-def _discard_cancelled_task_result(task: asyncio.Task[_TaskResultT]) -> None:
+def _discard_cancelled_task_result(task: asyncio.Task[TaskResultT]) -> None:
     try:
         task.result()
     except asyncio.CancelledError:

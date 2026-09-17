@@ -14,7 +14,7 @@ from sglang_omni.models.ming_omni.pipeline.next_stage import AUDIO_STAGE, IMAGE_
 from sglang_omni.models.ming_omni.tp_utils import validate_stage_tp_support
 from sglang_omni.proto import StagePayload
 
-_EncoderInputT = TypeVar("_EncoderInputT")
+EncoderInputT = TypeVar("EncoderInputT")
 
 
 def project_preprocessing_to_audio_encoder(payload: StagePayload) -> StagePayload:
@@ -103,7 +103,7 @@ def _payload_with_state(
 
 
 def _project_encoder_input_metadata(
-    encoder_inputs: dict[str, _EncoderInputT],
+    encoder_inputs: dict[str, EncoderInputT],
 ) -> dict[str, dict[str, Any]]:
     projected: dict[str, dict[str, Any]] = {}
     for stage_name, stage_inputs in encoder_inputs.items():

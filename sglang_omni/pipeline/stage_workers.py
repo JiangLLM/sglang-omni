@@ -31,7 +31,7 @@ from sglang_omni.pipeline.stage.stream_queue import StreamQueue
 from sglang_omni.pipeline.tp_control import (
     TPFollowerControlPlane,
     TPLeaderFanout,
-    _TPWorkQueueMessage,
+    TPWorkQueueMessage,
 )
 from sglang_omni.platforms import current_platform, get_platform_spec
 from sglang_omni.proto import AbortMessage, AdminResultMessage
@@ -123,12 +123,12 @@ class StageLaunchConfig:
     replica_topology: dict[str, list[str]] = field(default_factory=dict)
 
     # TP internal control (leader -> followers)
-    follower_work_queues: list[Queue[_TPWorkQueueMessage]] = field(default_factory=list)
+    follower_work_queues: list[Queue[TPWorkQueueMessage]] = field(default_factory=list)
     follower_abort_queues: list[Queue[AbortMessage]] = field(default_factory=list)
     follower_admin_result_queues: list[Queue[AdminResultMessage]] = field(
         default_factory=list
     )
-    internal_work_queue: Queue[_TPWorkQueueMessage] | None = None
+    internal_work_queue: Queue[TPWorkQueueMessage] | None = None
     internal_abort_queue: Queue[AbortMessage] | None = None
     internal_admin_result_queue: Queue[AdminResultMessage] | None = None
 

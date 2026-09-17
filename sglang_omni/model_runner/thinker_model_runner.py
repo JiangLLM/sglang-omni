@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CursorT = TypeVar("_CursorT")
+CursorT = TypeVar("CursorT")
 
 
 class ThinkerModelRunner(ModelRunner):
@@ -128,11 +128,11 @@ class ThinkerModelRunner(ModelRunner):
     @staticmethod
     def _plan_modality_chunk(
         positions: torch.Tensor,
-        consumed: dict[str, _CursorT],
+        consumed: dict[str, CursorT],
         modality: str,
         prefix: int,
         length: int,
-    ) -> tuple[torch.Tensor, _CursorT | int, int]:
+    ) -> tuple[torch.Tensor, CursorT | int, int]:
         """Plan the embed slice for positions in ``[prefix, prefix + length)``.
 
         The caller owns cursor advancement; this helper never mutates ``consumed``.

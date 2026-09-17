@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     )
     from sglang_omni.scheduling.types import SchedulerRequest
 
-_RequestT = TypeVar("_RequestT")
+RequestT = TypeVar("RequestT")
 
 
 class AudioTorchMpsModelRunner(ModelRunner):
@@ -38,7 +38,7 @@ class AudioTorchMpsModelRunner(ModelRunner):
         del batch
         return False
 
-    def _one_request(self, requests: list[_RequestT]) -> _RequestT:
+    def _one_request(self, requests: list[RequestT]) -> RequestT:
         if len(requests) != 1:
             raise RuntimeError(
                 f"{self.model_name} Torch MPS currently requires max_running_requests=1"

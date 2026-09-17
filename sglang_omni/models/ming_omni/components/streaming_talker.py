@@ -34,7 +34,7 @@ DEFAULT_VOICE = "DB30"
 DEFAULT_SAMPLE_RATE = 44100
 
 
-class _AudioChunkPayloadRequired(TypedDict):
+class AudioChunkPayloadRequired(TypedDict):
     modality: str
     audio_waveform: bytes
     audio_waveform_shape: list[int]
@@ -44,7 +44,7 @@ class _AudioChunkPayloadRequired(TypedDict):
     segment_id: int
 
 
-class _AudioChunkPayload(_AudioChunkPayloadRequired, total=False):
+class AudioChunkPayload(AudioChunkPayloadRequired, total=False):
     talker_first_audio_ms: float
 
 
@@ -280,7 +280,7 @@ class MingStreamingTalkerScheduler:
         segment_id: int,
     ) -> None:
         audio_bytes, shape, dtype = self._serialize_waveform(waveform)
-        payload: _AudioChunkPayload = {
+        payload: AudioChunkPayload = {
             "modality": "audio",
             "audio_waveform": audio_bytes,
             "audio_waveform_shape": shape,

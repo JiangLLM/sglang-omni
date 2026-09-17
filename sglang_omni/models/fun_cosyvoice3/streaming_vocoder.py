@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 SAMPLE_RATE = 24000
 
 NextDecode = Literal["causal_window", "leftover", "fallback", "wait"]
-_RequestCostT = TypeVar("_RequestCostT")
+RequestCostT = TypeVar("RequestCostT")
 
 
 @dataclass
@@ -88,7 +88,7 @@ class FunCosyVoice3StreamingVocoderScheduler(
         max_batch_size: int = 8,
         max_batch_wait_ms: int = 2,
         sample_rate: int = SAMPLE_RATE,
-        request_cost_fn: Callable[[_RequestCostT], int] | None = None,
+        request_cost_fn: Callable[[RequestCostT], int] | None = None,
         max_batch_cost: int | None = None,
         token_hop_len: int = TOKEN_HOP_LEN,
         token_max_hop_len: int = TOKEN_MAX_HOP_LEN,

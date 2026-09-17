@@ -24,7 +24,7 @@ from sglang_omni.vendor.sglang.core import (
 )
 
 
-class _PrefillInputIds(Protocol):
+class PrefillInputIds(Protocol):
     @property
     def input_ids(self) -> object: ...
 
@@ -206,7 +206,7 @@ class FishS2ProModelRunner(ModelRunner):
 
     def _build_prefill_input_embeds(
         self,
-        forward_batch: _PrefillInputIds,
+        forward_batch: PrefillInputIds,
         requests: list[SchedulerRequest],
     ) -> torch.Tensor:
         input_ids = forward_batch.input_ids

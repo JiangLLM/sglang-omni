@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from sglang_omni.models.dots_tts.tail import DotsTtsAcousticTail
 
-_ConfigValue = TypeVar("_ConfigValue")
+ConfigValue = TypeVar("ConfigValue")
 
 
 @dataclass
@@ -61,7 +61,7 @@ class DotsTTSFlowHead(nn.Module):
 
     def __init__(
         self,
-        config_dict: dict[str, _ConfigValue],
+        config_dict: dict[str, ConfigValue],
         *,
         llm_hidden_size: int,
         latent_stats_path: str,

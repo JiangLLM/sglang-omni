@@ -19,7 +19,7 @@ from .base import MediaIO, _is_url
 if TYPE_CHECKING:
     from .resource_connector import MultiModalResourceConnector
 
-_AudioInputT = TypeVar("_AudioInputT")
+AudioInputT = TypeVar("AudioInputT")
 
 
 def _decode_audio_bytes_av(data: bytes) -> tuple[npt.NDArray[np.float32], int]:
@@ -263,8 +263,8 @@ async def ensure_audio_list_async(
 
 
 def build_audio_mm_inputs(
-    hf_inputs: Mapping[str, _AudioInputT],
-) -> dict[str, _AudioInputT | torch.Tensor | None]:
+    hf_inputs: Mapping[str, AudioInputT],
+) -> dict[str, AudioInputT | torch.Tensor | None]:
     """Extract standard audio tensors from HF processor outputs."""
     feature_attention_mask = hf_inputs.get("feature_attention_mask")
     audio_feature_lengths = hf_inputs.get("audio_feature_lengths")

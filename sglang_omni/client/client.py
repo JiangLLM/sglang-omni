@@ -34,10 +34,10 @@ from sglang_omni.pipeline.coordinator import Coordinator, CoordinatorHealth
 from sglang_omni.proto import OmniRequest, RequestState, StreamMessage
 from sglang_omni.proto.admin import AdminResponse
 
-_PayloadValue = TypeVar("_PayloadValue")
+PayloadValue = TypeVar("PayloadValue")
 
 
-class _EncodeAudioOptions(TypedDict, total=False):
+class EncodeAudioOptions(TypedDict, total=False):
     response_format: str
     sample_rate: int
     speed: float
@@ -256,7 +256,7 @@ class Client:
             axis = -1 if arrays[0].ndim > 1 else 0
             audio_data = np.concatenate(arrays, axis=axis)
 
-        encode_kwargs: _EncodeAudioOptions = {
+        encode_kwargs: EncodeAudioOptions = {
             "response_format": response_format,
             "speed": speed,
             "allow_format_fallback": allow_format_fallback,
@@ -309,7 +309,7 @@ class Client:
     async def admin(
         self,
         action: str,
-        payload: dict[str, _PayloadValue] | None = None,
+        payload: dict[str, PayloadValue] | None = None,
         *,
         stages: list[str] | None = None,
         timeout_s: float = 60.0,
@@ -334,7 +334,7 @@ class Client:
 
     async def pause_generation(
         self,
-        payload: dict[str, _PayloadValue] | None = None,
+        payload: dict[str, PayloadValue] | None = None,
         *,
         stages: list[str] | None = None,
         timeout_s: float = 60.0,
@@ -347,7 +347,7 @@ class Client:
 
     async def continue_generation(
         self,
-        payload: dict[str, _PayloadValue] | None = None,
+        payload: dict[str, PayloadValue] | None = None,
         *,
         stages: list[str] | None = None,
         timeout_s: float = 60.0,
@@ -360,7 +360,7 @@ class Client:
 
     async def update_weights_from_disk(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValue],
         *,
         stages: list[str] | None = None,
         timeout_s: float = 120.0,
@@ -373,7 +373,7 @@ class Client:
 
     async def init_weights_update_group(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValue],
         *,
         stages: list[str] | None = None,
         timeout_s: float = 300.0,
@@ -386,7 +386,7 @@ class Client:
 
     async def destroy_weights_update_group(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValue],
         *,
         stages: list[str] | None = None,
         timeout_s: float = 300.0,
@@ -399,7 +399,7 @@ class Client:
 
     async def update_weights_from_distributed(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValue],
         *,
         stages: list[str] | None = None,
         timeout_s: float = 300.0,
@@ -412,7 +412,7 @@ class Client:
 
     async def weights_checker(
         self,
-        payload: dict[str, _PayloadValue] | None = None,
+        payload: dict[str, PayloadValue] | None = None,
         *,
         stages: list[str] | None = None,
         timeout_s: float = 120.0,

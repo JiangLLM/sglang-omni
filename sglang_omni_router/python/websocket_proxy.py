@@ -81,7 +81,7 @@ ClientRelayOutcome = Literal[
 ]
 
 
-class _UpstreamWebSocket(Protocol):
+class UpstreamWebSocket(Protocol):
     """Relay operations shared by modern and legacy websockets clients."""
 
     def __aiter__(self) -> AsyncIterator[str | bytes]: ...
@@ -456,7 +456,7 @@ def _connection_failure_result(exc: Exception) -> _SessionResult:
 
 async def _relay(
     websocket: WebSocket,
-    upstream: _UpstreamWebSocket,
+    upstream: UpstreamWebSocket,
     *,
     max_client_message_bytes: int,
 ) -> RelayOutcome:
@@ -481,7 +481,7 @@ async def _relay(
 
 async def _coordinate_relay(
     websocket: WebSocket,
-    upstream: _UpstreamWebSocket,
+    upstream: UpstreamWebSocket,
     *,
     client_task: asyncio.Task[ClientRelayOutcome],
     upstream_task: asyncio.Task[RelayOutcome],
@@ -534,7 +534,7 @@ def _raise_completed_task_error(
             raise error
 
 
-async def _close_upstream(upstream: _UpstreamWebSocket, *, code: int) -> None:
+async def _close_upstream(upstream: UpstreamWebSocket, *, code: int) -> None:
     try:
         await upstream.close(code=code)
     except (WebSocketException, OSError, asyncio.TimeoutError):
@@ -562,7 +562,7 @@ async def _cancel_relay_tasks(
 
 async def _client_to_upstream(
     websocket: WebSocket,
-    upstream: _UpstreamWebSocket,
+    upstream: UpstreamWebSocket,
     *,
     max_message_bytes: int,
 ) -> ClientRelayOutcome:
@@ -583,7 +583,7 @@ async def _client_to_upstream(
 
 
 async def _upstream_to_client(
-    upstream: _UpstreamWebSocket,
+    upstream: UpstreamWebSocket,
     websocket: WebSocket,
 ) -> RelayOutcome:
     protocol = _TTSProtocolState()
@@ -707,7 +707,7 @@ def _is_application_close(exc: ConnectionClosed) -> bool:
     )
 
 
-async def _send_upstream(upstream: _UpstreamWebSocket, message: dict[str, Any]) -> None:
+async def _send_upstream(upstream: UpstreamWebSocket, message: dict[str, Any]) -> None:
     if message.get("type") != "websocket.receive":
         return
     text = message.get("text")

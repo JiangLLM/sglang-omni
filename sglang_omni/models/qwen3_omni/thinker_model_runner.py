@@ -35,7 +35,7 @@ _PREFILL_AUDIO_INPUT_KEYS = frozenset(
 
 _SIDECAR = "sidecar"
 _UNSUPPORTED = "unsupported"
-_PadValueT = TypeVar("_PadValueT")
+PadValueT = TypeVar("PadValueT")
 
 
 @dataclass(frozen=True)
@@ -91,7 +91,7 @@ class Qwen3OmniThinkerModelRunner(ThinkerModelRunner):
         return [int(item) for item in value]
 
     def _mm_positions(
-        self, req: object, pad_values: dict[str, _PadValueT]
+        self, req: object, pad_values: dict[str, PadValueT]
     ) -> dict[str, torch.Tensor] | None:
         try:
             positions = self._req_mm_token_positions(req, pad_values)

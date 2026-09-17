@@ -58,19 +58,19 @@ HANDLERS: dict[type[ClientEvent], str] = {
 }
 
 _UNSET = object()
-_EventValueT = TypeVar("_EventValueT")
-_DetectionValueT = TypeVar("_DetectionValueT")
-_TaskResultT = TypeVar("_TaskResultT")
+EventValueT = TypeVar("EventValueT")
+DetectionValueT = TypeVar("DetectionValueT")
+TaskResultT = TypeVar("TaskResultT")
 
 
-class _RequiredTerminalFields(TypedDict):
+class RequiredTerminalFields(TypedDict):
     response_text: str
     include_audio: bool
     status: str
     reason: str
 
 
-class _TerminalFields(_RequiredTerminalFields, total=False):
+class TerminalFields(RequiredTerminalFields, total=False):
     error: tuple[str, str, str] | None
 
 
@@ -189,7 +189,7 @@ class RealtimeSession:
             assert isinstance(payload, dict), "Top-level payload must be a JSON object"
             await self.dispatch(payload)
 
-    async def dispatch(self, payload: dict[str, _EventValueT]) -> None:
+    async def dispatch(self, payload: dict[str, EventValueT]) -> None:
         event = parse_conversation_client_event(payload)
         assert event is not None, f"Unsupported event type: {payload.get('type')!r}"
         method_name = HANDLERS[type(event)]
@@ -364,15 +364,15 @@ class RealtimeSession:
     @staticmethod
     @overload
     def _merge_turn_detection(
-        current: Mapping[str, _DetectionValueT] | None,
-        update: Mapping[str, _DetectionValueT] | None,
-    ) -> dict[str, _DetectionValueT | str] | None: ...
+        current: Mapping[str, DetectionValueT] | None,
+        update: Mapping[str, DetectionValueT] | None,
+    ) -> dict[str, DetectionValueT | str] | None: ...
 
     @staticmethod
     def _merge_turn_detection(
-        current: Mapping[str, _DetectionValueT] | None,
-        update: Mapping[str, _DetectionValueT] | None,
-    ) -> dict[str, _DetectionValueT | str] | None:
+        current: Mapping[str, DetectionValueT] | None,
+        update: Mapping[str, DetectionValueT] | None,
+    ) -> dict[str, DetectionValueT | str] | None:
         if update is None:
             return dict(current) if current is not None else None
         current_data = dict(current or {})
@@ -381,7 +381,7 @@ class RealtimeSession:
             current_data.get("type") or TurnDetectionType.SERVER_VAD.value
         )
         requested_type = str(update_data.get("type") or current_type)
-        merged: dict[str, _DetectionValueT | str]
+        merged: dict[str, DetectionValueT | str]
         if requested_type == current_type:
             merged = {**current_data, **update_data}
         else:
@@ -717,7 +717,7 @@ class RealtimeSession:
                 self._remember_cancelled_assistant_item(resp_item_id)
             response_done = True
 
-        async def emit_terminals_safely(**kwargs: Unpack[_TerminalFields]) -> None:
+        async def emit_terminals_safely(**kwargs: Unpack[TerminalFields]) -> None:
             terminal_task = asyncio.create_task(emit_terminals(**kwargs))
             try:
                 await asyncio.shield(terminal_task)
@@ -1066,7 +1066,7 @@ class RealtimeSession:
         )
 
     async def _cancel_and_abort(
-        self, task: asyncio.Task[_TaskResultT] | None, request_id: str | None
+        self, task: asyncio.Task[TaskResultT] | None, request_id: str | None
     ) -> None:
         """Cancel the owning turn, abort its engine request, absorb the result.
 

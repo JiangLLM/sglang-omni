@@ -23,16 +23,16 @@ from sglang_omni.comm.data_ref import (
 )
 from sglang_omni.proto import DataReadyMessage, StagePayload
 from sglang_omni.proto.messages import (
-    _DirectCudaIpcPayloadRef,
-    _DirectCudaIpcStreamChunkRef,
-    _InlineStreamChunkRef,
-    _StageDataRef,
+    DirectCudaIpcPayloadRef,
+    DirectCudaIpcStreamChunkRef,
+    InlineStreamChunkRef,
+    StageDataRef,
 )
 from sglang_omni.relay.base import Relay, RelayOperation
 
-_MetadataValue = TypeVar("_MetadataValue")
-_MetadataKey = TypeVar("_MetadataKey")
-_RefValue = TypeVar("_RefValue")
+MetadataValueT = TypeVar("MetadataValueT")
+MetadataKeyT = TypeVar("MetadataKeyT")
+RefValueT = TypeVar("RefValueT")
 
 
 class StageMessageSender(Protocol):
@@ -144,8 +144,8 @@ def restore_tensors(obj: object, tensors: dict[str, torch.Tensor]) -> Any:
 
 
 def strip_process_local_metadata(
-    metadata: dict[str, _MetadataValue] | None,
-) -> dict[str, _MetadataValue] | None:
+    metadata: dict[str, MetadataValueT] | None,
+) -> dict[str, MetadataValueT] | None:
     """Drop values that only mean something inside the sending process.
 
     A CUDA event orders a same-process consumer after the producer's stream;
@@ -161,7 +161,7 @@ def strip_process_local_metadata(
 
 
 def should_use_direct_cuda_ipc_stream_chunk(
-    data: object, metadata: dict[str, _MetadataValue] | None
+    data: object, metadata: dict[str, MetadataValueT] | None
 ) -> bool:
     if not _contains_cuda_tensor(data):
         return False
@@ -177,7 +177,7 @@ def payload_has_cuda_tensor(payload: object) -> bool:
 
 def serialize_direct_cuda_ipc_payload(
     payload: StagePayload,
-) -> _DirectCudaIpcPayloadRef:
+) -> DirectCudaIpcPayloadRef:
     if not isinstance(payload, StagePayload):
         raise TypeError(
             f"direct CUDA IPC payload requires StagePayload, got "
@@ -212,7 +212,7 @@ def is_direct_cuda_ipc_payload_ref(value: object) -> bool:
 
 
 def deserialize_direct_cuda_ipc_payload(
-    data_ref: dict[str, _RefValue] | _StageDataRef,
+    data_ref: dict[str, RefValueT] | StageDataRef,
 ) -> StagePayload:
     if data_ref.get("_type") != _DIRECT_CUDA_IPC_PAYLOAD_TYPE:
         raise ValueError("data_ref is not a direct CUDA IPC payload")
@@ -277,11 +277,11 @@ def deserialize_direct_cuda_ipc_payload(
 
 def serialize_direct_cuda_ipc_stream_chunk(
     data: object,
-    metadata: dict[str, _MetadataValue] | None,
-) -> _DirectCudaIpcStreamChunkRef:
+    metadata: dict[str, MetadataValueT] | None,
+) -> DirectCudaIpcStreamChunkRef:
     if not should_use_direct_cuda_ipc_stream_chunk(data, metadata):
         raise ValueError("same-GPU CUDA stream chunk is not direct-IPC eligible")
-    ref: _DirectCudaIpcStreamChunkRef = {
+    ref: DirectCudaIpcStreamChunkRef = {
         "_type": _DIRECT_CUDA_IPC_STREAM_CHUNK_TYPE,
         "version": 1,
         "tensor_bytes": _ipc_pickle(data),
@@ -296,8 +296,8 @@ _INLINE_STREAM_CHUNK_BYTES_LIMIT = 16 * 1024
 
 
 def serialize_inline_stream_chunk(
-    data: object, metadata: dict[str, _MetadataValue] | None
-) -> _InlineStreamChunkRef | None:
+    data: object, metadata: dict[str, MetadataValueT] | None
+) -> InlineStreamChunkRef | None:
     if not isinstance(data, torch.Tensor) or data.device.type != "cpu":
         return None
     if _contains_cuda_tensor(metadata) or _contains_cpu_tensor(metadata):
@@ -322,7 +322,7 @@ def is_inline_stream_chunk_ref(value: object) -> bool:
 
 
 def deserialize_inline_stream_chunk(
-    data_ref: dict[str, _RefValue] | _StageDataRef,
+    data_ref: dict[str, RefValueT] | StageDataRef,
 ) -> tuple[torch.Tensor, dict[str, Any] | None]:
     if data_ref.get("_type") != _INLINE_STREAM_CHUNK_TYPE:
         raise ValueError("data_ref is not an inline stream chunk")
@@ -366,7 +366,7 @@ def is_direct_cuda_ipc_stream_chunk_ref(value: object) -> bool:
 
 
 def deserialize_direct_cuda_ipc_stream_chunk(
-    data_ref: dict[str, _RefValue] | _StageDataRef,
+    data_ref: dict[str, RefValueT] | StageDataRef,
 ) -> tuple[Any, dict[str, Any] | None]:
     if data_ref.get("_type") != _DIRECT_CUDA_IPC_STREAM_CHUNK_TYPE:
         raise ValueError("data_ref is not a direct CUDA IPC stream chunk")
@@ -543,7 +543,7 @@ async def write_stream_chunk(
     from_stage: str,
     chunk_id: int,
     object_id: str | None = None,
-    metadata: dict[_MetadataKey, _MetadataValue] | None = None,
+    metadata: dict[MetadataKeyT, MetadataValueT] | None = None,
     transport: TransportKind,
 ) -> tuple[DataRef, list[RelayOperation]]:
     if object_id is None:
@@ -619,7 +619,7 @@ async def send_stream_signal(
 async def _with_stream_metadata(
     relay: Relay,
     data_ref: DataRef,
-    metadata: dict[_MetadataKey, _MetadataValue] | None,
+    metadata: dict[MetadataKeyT, MetadataValueT] | None,
     transport: TransportKind,
     pending_ops: list[RelayOperation],
     *,

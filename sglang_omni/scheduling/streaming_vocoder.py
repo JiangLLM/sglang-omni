@@ -52,9 +52,9 @@ _COMPLETED_STREAM_REQUEST_ID_RETAINED = 5000
 
 StreamStateT = TypeVar("StreamStateT")
 StepPlanT = TypeVar("StepPlanT")
-_ComputeInputT = TypeVar("_ComputeInputT")
-_ComputeResultT = TypeVar("_ComputeResultT")
-_RequestCostInputT = TypeVar("_RequestCostInputT")
+ComputeInputT = TypeVar("ComputeInputT")
+ComputeResultT = TypeVar("ComputeResultT")
+RequestCostInputT = TypeVar("RequestCostInputT")
 
 
 def resolve_initial_codec_chunk_frames(
@@ -106,7 +106,7 @@ class StreamingVocoderBase(
 
     def __init__(
         self,
-        compute_fn: Callable[[_ComputeInputT], _ComputeResultT] | None,
+        compute_fn: Callable[[ComputeInputT], ComputeResultT] | None,
         *,
         sample_rate: int,
         stream_source_hint: str | None = None,
@@ -114,7 +114,7 @@ class StreamingVocoderBase(
         batch_compute_fn: Callable[[list[Any]], list[Any]] | None = None,
         max_batch_size: int = 1,
         max_batch_wait_ms: int = 0,
-        request_cost_fn: Callable[[_RequestCostInputT], int] | None = None,
+        request_cost_fn: Callable[[RequestCostInputT], int] | None = None,
         max_batch_cost: int | None = None,
         abort_callback: Callable[[str], None] | None = None,
     ) -> None:

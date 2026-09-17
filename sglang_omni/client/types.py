@@ -8,13 +8,13 @@ from enum import Enum
 from typing import Any, TypedDict
 
 
-class _TokenUsageDict(TypedDict):
+class TokenUsageDict(TypedDict):
     prompt_tokens: int | None
     completion_tokens: int | None
     total_tokens: int | None
 
 
-class _UsageInfoDict(_TokenUsageDict, total=False):
+class UsageInfoDict(TokenUsageDict, total=False):
     engine_time_s: float
 
 
@@ -49,8 +49,8 @@ class UsageInfo:
             engine_time_s=data.get("engine_time_s"),
         )
 
-    def to_dict(self) -> _UsageInfoDict:
-        d: _UsageInfoDict = {
+    def to_dict(self) -> UsageInfoDict:
+        d: UsageInfoDict = {
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,

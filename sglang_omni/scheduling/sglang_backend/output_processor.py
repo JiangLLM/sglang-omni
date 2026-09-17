@@ -18,8 +18,8 @@ if TYPE_CHECKING:
     from sglang.srt.managers.scheduler import GenerationBatchResult
 
 
-_HiddenKey = TypeVar("_HiddenKey")
-_AuxHiddenExtra: TypeAlias = dict[str, torch.Tensor | dict[str | int, torch.Tensor]]
+HiddenKey = TypeVar("HiddenKey")
+AuxHiddenExtra: TypeAlias = dict[str, torch.Tensor | dict[str | int, torch.Tensor]]
 
 
 class SGLangOutputProcessor:
@@ -139,7 +139,7 @@ class SGLangOutputProcessor:
         model_output: GenerationBatchResult,
         scheduler_output: SchedulerOutput,
         request_indexes: list[int],
-    ) -> dict[int, _AuxHiddenExtra | None]:
+    ) -> dict[int, AuxHiddenExtra | None]:
         if not request_indexes:
             return {}
         stream_hidden_states = self._extract_stream_hidden_states(model_output)
@@ -160,7 +160,7 @@ class SGLangOutputProcessor:
         request_index: int,
         scheduler_output: SchedulerOutput,
         stream_hidden_states: torch.Tensor | None,
-    ) -> _AuxHiddenExtra:
+    ) -> AuxHiddenExtra:
         per_request_hidden = {}
         for layer_id, tensor in zip(
             self._capture_hidden_layers or [],
@@ -173,7 +173,7 @@ class SGLangOutputProcessor:
                 scheduler_output=scheduler_output,
             ).clone()
 
-        extra: _AuxHiddenExtra = {"hidden_states": per_request_hidden}
+        extra: AuxHiddenExtra = {"hidden_states": per_request_hidden}
         if stream_hidden_states is not None:
             extra["stream_hidden_states"] = self._slice_per_request_tensor(
                 stream_hidden_states,
@@ -184,11 +184,11 @@ class SGLangOutputProcessor:
 
     def _build_dict_hidden_extra(
         self,
-        hidden_states: dict[_HiddenKey, torch.Tensor],
+        hidden_states: dict[HiddenKey, torch.Tensor],
         *,
         request_index: int,
         scheduler_output: SchedulerOutput,
-    ) -> dict[str, dict[_HiddenKey, torch.Tensor]]:
+    ) -> dict[str, dict[HiddenKey, torch.Tensor]]:
         return {
             "hidden_states": {
                 key: self._slice_per_request_tensor(

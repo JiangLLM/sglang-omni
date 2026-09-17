@@ -21,18 +21,18 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_ChunkT = TypeVar("_ChunkT")
+ChunkT = TypeVar("ChunkT")
 
 _CHUNK_WAIT_LOG_INTERVAL_S = 10.0
 
 
-class _DecodeMode(Protocol):
+class DecodeMode(Protocol):
     def is_decode(self) -> object: ...
 
 
-class _DecodeBatch(Protocol):
+class DecodeBatch(Protocol):
     @property
-    def forward_mode(self) -> _DecodeMode: ...
+    def forward_mode(self) -> DecodeMode: ...
 
 
 def configure_talker_server_args(
@@ -103,7 +103,7 @@ class QwenTalkerScheduler(OmniScheduler):
                 self._partial_start_min_chunks,
             )
 
-    def _count_usable_prefetched_chunks(self, prefetched: list[_ChunkT]) -> int:
+    def _count_usable_prefetched_chunks(self, prefetched: list[ChunkT]) -> int:
         im_end = self._im_end_token_id
         if im_end is None or not prefetched:
             return len(prefetched)
@@ -143,7 +143,7 @@ class QwenTalkerScheduler(OmniScheduler):
         del request_id, chunk
         return self._enable_partial_start
 
-    def _is_batch_ready_to_run(self, batch: _DecodeBatch | None) -> bool:
+    def _is_batch_ready_to_run(self, batch: DecodeBatch | None) -> bool:
         if (
             batch is not None
             and batch.forward_mode.is_decode()

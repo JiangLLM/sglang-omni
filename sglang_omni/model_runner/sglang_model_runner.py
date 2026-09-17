@@ -28,7 +28,7 @@ from sglang_omni.utils.gpu_memory import (
 logger = logging.getLogger(__name__)
 _PREFILL_RUNNER_DISPATCH_LOCK = Lock()
 _PREFILL_RUNNER_DISPATCH_DEFAULT: type | None = None
-_Weight = TypeVar("_Weight")
+WeightT = TypeVar("WeightT")
 
 
 def _install_prefill_runner_dispatch() -> None:
@@ -51,9 +51,9 @@ def _install_prefill_runner_dispatch() -> None:
 
 
 def filter_weights_by_prefix(
-    weights: Iterator[tuple[str, _Weight]],
+    weights: Iterator[tuple[str, WeightT]],
     prefix: str | None,
-) -> Iterator[tuple[str, _Weight]]:
+) -> Iterator[tuple[str, WeightT]]:
     """Filter weight iterator by prefix, stripping matched prefix from names."""
     if not prefix:
         yield from weights

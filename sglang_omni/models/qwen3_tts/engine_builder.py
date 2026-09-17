@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     )
 
 
-_OverrideValueT = TypeVar("_OverrideValueT")
+OverrideValueT = TypeVar("OverrideValueT")
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,7 @@ class Qwen3TtsEngineBuilder(TtsEngineBuilder):
         # runs in before_memory_pool and nothing is left for after the pool.
         del model_worker, checkpoint_dir, device, gpu_id, server_args
 
-    def adjust_overrides(self, overrides: dict[str, _OverrideValueT]) -> None:
+    def adjust_overrides(self, overrides: dict[str, OverrideValueT]) -> None:
         if _is_truthy(overrides.get("enable_torch_compile", False)):
             raise ValueError("Qwen3-TTS torch.compile is not supported")
 

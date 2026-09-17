@@ -65,13 +65,13 @@ VOICE_UPLOAD_EXTENSION_MIME_TYPES = {
 }
 
 
-class _OptionalVoiceResponse(TypedDict, total=False):
+class OptionalVoiceResponse(TypedDict, total=False):
     ref_text: str
     speaker_description: str
     warning: str
 
 
-class _UploadedVoiceResponse(_OptionalVoiceResponse):
+class UploadedVoiceResponse(OptionalVoiceResponse):
     name: str
     consent: str
     created_at: int
@@ -79,23 +79,23 @@ class _UploadedVoiceResponse(_OptionalVoiceResponse):
     mime_type: str
 
 
-class _VoiceListResponse(TypedDict):
+class VoiceListResponse(TypedDict):
     voices: list[str]
-    uploaded_voices: list[_UploadedVoiceResponse]
+    uploaded_voices: list[UploadedVoiceResponse]
     cache_stats: dict[str, int]
 
 
-class _SafeTensorMetadata(Protocol):
+class SafeTensorMetadata(Protocol):
     def metadata(self) -> dict[str, str] | None: ...
 
 
-class _SafeOpenMetadata(Protocol):
+class SafeOpenMetadata(Protocol):
     def __call__(
         self, filename: str, /, *, framework: Literal["np"]
-    ) -> AbstractContextManager[_SafeTensorMetadata]: ...
+    ) -> AbstractContextManager[SafeTensorMetadata]: ...
 
 
-class _SaveVoiceFile(Protocol):
+class SaveVoiceFile(Protocol):
     def __call__(
         self,
         tensor_dict: dict[str, np.ndarray[tuple[int, ...], np.dtype[np.float32]]],
@@ -124,8 +124,8 @@ class UploadedVoice:
     ref_text: str | None = None
     speaker_description: str | None = None
 
-    def to_response_dict(self) -> _UploadedVoiceResponse:
-        response: _UploadedVoiceResponse = {
+    def to_response_dict(self) -> UploadedVoiceResponse:
+        response: UploadedVoiceResponse = {
             "name": self.name,
             "consent": self.consent,
             "created_at": self.created_at,
@@ -191,7 +191,7 @@ class SpeakerSampleStore:
         self._lock = RLock()
         self._restore()
 
-    def list_response(self) -> _VoiceListResponse:
+    def list_response(self) -> VoiceListResponse:
         with self._lock:
             uploaded = sorted(self._voices.values(), key=lambda item: item.name.lower())
             voices = sorted(
@@ -226,7 +226,7 @@ class SpeakerSampleStore:
         content_type: str | None,
         ref_text: str | None = None,
         speaker_description: str | None = None,
-    ) -> _UploadedVoiceResponse:
+    ) -> UploadedVoiceResponse:
         normalized_name = normalize_voice_name(name)
         if normalized_name in DEFAULT_VOICE_PRESETS:
             raise bad_request("name is reserved for a preset voice", param="name")
@@ -550,7 +550,7 @@ def _replace_voice_file(temp_path: Path, path: Path) -> None:
         raise internal_error("Failed to save uploaded voice") from exc
 
 
-def _safetensors_safe_open() -> _SafeOpenMetadata:
+def _safetensors_safe_open() -> SafeOpenMetadata:
     try:
         from safetensors import safe_open
     except ImportError as exc:
@@ -566,7 +566,7 @@ def _safetensors_load_file() -> Any:
     return load_file
 
 
-def _safetensors_save_file() -> _SaveVoiceFile:
+def _safetensors_save_file() -> SaveVoiceFile:
     try:
         from safetensors.numpy import save_file
     except ImportError as exc:

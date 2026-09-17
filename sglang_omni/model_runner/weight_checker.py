@@ -19,7 +19,7 @@ class SerializedTensorDigest(TypedDict):
     sha256: str
 
 
-class _RequiredWeightCheckResult(TypedDict):
+class RequiredWeightCheckResult(TypedDict):
     action: str
     tensor_count: int
     checksums: dict[str, str]
@@ -28,7 +28,7 @@ class _RequiredWeightCheckResult(TypedDict):
     elapsed_s: float
 
 
-class WeightCheckResult(_RequiredWeightCheckResult, total=False):
+class WeightCheckResult(RequiredWeightCheckResult, total=False):
     matched: bool
     missing: list[str]
     unexpected: list[str]

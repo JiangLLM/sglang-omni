@@ -30,8 +30,8 @@ if TYPE_CHECKING:
 
 _DEFAULT_CONTEXT_LENGTH = 2048
 
-_ValueT = TypeVar("_ValueT")
-_DefaultT = TypeVar("_DefaultT")
+ValueT = TypeVar("ValueT")
+DefaultT = TypeVar("DefaultT")
 
 
 def _configure_optimized_kernels() -> None:
@@ -65,18 +65,16 @@ def _configure_optimized_kernels() -> None:
 
 
 @overload
-def _first_not_none(
-    *values: _ValueT | None, default: _DefaultT
-) -> _ValueT | _DefaultT: ...
+def _first_not_none(*values: ValueT | None, default: DefaultT) -> ValueT | DefaultT: ...
 
 
 @overload
-def _first_not_none(*values: _ValueT | None) -> _ValueT | None: ...
+def _first_not_none(*values: ValueT | None) -> ValueT | None: ...
 
 
 def _first_not_none(
-    *values: _ValueT | None, default: _DefaultT | None = None
-) -> _ValueT | _DefaultT | None:
+    *values: ValueT | None, default: DefaultT | None = None
+) -> ValueT | DefaultT | None:
     return next((value for value in values if value is not None), default)
 
 

@@ -58,16 +58,16 @@ _TTS_TASK_TYPE_ALIASES = {
 }
 _REFERENCE_AUDIO_FIELDS = ("audio_path", "ref_audio", "audio")
 _ReferenceCacheKey = tuple[str, str | None, str | None, str | None, tuple[Any, ...]]
-_PayloadValue = TypeVar("_PayloadValue")
+PayloadValue = TypeVar("PayloadValue")
 
 
-class _RequiredTTSParams(TypedDict):
+class RequiredTTSParams(TypedDict):
     voice: str
     response_format: str
     speed: float
 
 
-class _TTSParams(_RequiredTTSParams, total=False):
+class TTSParams(RequiredTTSParams, total=False):
     explicit_generation_params: list[str]
     task_type: str
     language: str
@@ -209,7 +209,7 @@ class SpeechRequestValidator:
 
     def validate_raw_speech_fields(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValue],
     ) -> None:
         """Validate speech fields before Pydantic can coerce JSON values."""
 
@@ -715,7 +715,7 @@ class SpeechRequestValidator:
                 )
         return uploaded_voice
 
-    def _validate_raw_payload(self, payload: dict[str, _PayloadValue]) -> None:
+    def _validate_raw_payload(self, payload: dict[str, PayloadValue]) -> None:
         for field_name in (
             "model",
             "input",
@@ -848,8 +848,8 @@ def _build_tts_params(
     request: CreateSpeechRequest,
     *,
     uploaded_voice: "UploadedVoiceReference | None" = None,
-) -> _TTSParams:
-    tts_params: _TTSParams = {
+) -> TTSParams:
+    tts_params: TTSParams = {
         "voice": request.voice,
         "response_format": request.response_format,
         "speed": request.speed,

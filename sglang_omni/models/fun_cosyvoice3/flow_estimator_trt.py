@@ -29,12 +29,12 @@ _DEFAULT_ONNX_CANDIDATES = (
 )
 
 
-class _BuilderFlagNamespace(Protocol):
+class BuilderFlagNamespace(Protocol):
     @property
     def BuilderFlag(self) -> object: ...
 
 
-class _ExecutableFlowEstimator(Protocol):
+class ExecutableFlowEstimator(Protocol):
     def execute(
         self,
         x: torch.Tensor,
@@ -101,7 +101,7 @@ def _dynamic_shapes(time: int) -> dict[str, tuple[int, ...]]:
     }
 
 
-def _try_enable_fp16_tactics(config: Any, trt: _BuilderFlagNamespace) -> bool:
+def _try_enable_fp16_tactics(config: Any, trt: BuilderFlagNamespace) -> bool:
     """Enable weak-typed FP16 tactics when TensorRT still exposes the flag.
 
     Note (chenyang):
@@ -318,7 +318,7 @@ def _enqueue_once(
 
 
 def _run_estimator(
-    estimator: FlowEstimatorTRT | _ExecutableFlowEstimator,
+    estimator: FlowEstimatorTRT | ExecutableFlowEstimator,
     x: torch.Tensor,
     mask: torch.Tensor,
     mu: torch.Tensor,

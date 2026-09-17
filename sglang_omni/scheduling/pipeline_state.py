@@ -88,16 +88,16 @@ def _tensor_from_list(value: Any, _default: object = None) -> torch.Tensor | Non
     return torch.tensor(value)
 
 
-class _IndexableItems(Protocol):
+class IndexableItems(Protocol):
     def __getitem__(self, index: int, /) -> object: ...
 
 
-def _tensor_items_to_lists(value: Iterable[object] | _IndexableItems) -> list[Any]:
+def _tensor_items_to_lists(value: Iterable[object] | IndexableItems) -> list[Any]:
     return [_tensor_to_list(item) for item in value]
 
 
 def _tensor_items_from_lists(
-    value: Iterable[object] | _IndexableItems | None, _default: object = None
+    value: Iterable[object] | IndexableItems | None, _default: object = None
 ) -> list[torch.Tensor | None] | None:
     if value is None:
         return None

@@ -45,8 +45,8 @@ __all__ = [
 # Guard against a pathological schema; the real tree is only a few levels deep.
 _MAX_SCHEMA_DEPTH = 12
 
-_ItemT = TypeVar("_ItemT")
-_ValueT = TypeVar("_ValueT")
+ItemT = TypeVar("ItemT")
+ValueT = TypeVar("ValueT")
 
 
 class SegmentKind(str, Enum):
@@ -737,7 +737,7 @@ def _read_segment(
     return current[segment.raw]
 
 
-def _named_index(items: list[_ItemT], name: str, *, path: str) -> int:
+def _named_index(items: list[ItemT], name: str, *, path: str) -> int:
     for index, item in enumerate(items):
         if isinstance(item, dict) and item.get("name") == name:
             return index
@@ -792,7 +792,7 @@ def _join_prefix(prefix: str) -> str:
     return prefix or "<root>"
 
 
-def coerce_scalar_text(value: _ValueT) -> _ValueT | bool | int | float | None:
+def coerce_scalar_text(value: ValueT) -> ValueT | bool | int | float | None:
     """Best-effort scalar parsing for untyped (``Any``) positions.
 
     Mirrors the historical behaviour of ``ConfigManager._convert_scalar`` so

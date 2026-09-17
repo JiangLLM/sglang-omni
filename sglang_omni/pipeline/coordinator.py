@@ -38,7 +38,7 @@ from sglang_omni.proto.admin import AdminResponse
 
 logger = logging.getLogger(__name__)
 
-_PayloadValue = TypeVar("_PayloadValue")
+PayloadValueT = TypeVar("PayloadValueT")
 
 
 class CoordinatorHealth(TypedDict):
@@ -201,7 +201,7 @@ class Coordinator:
     async def admin(
         self,
         action: str,
-        payload: dict[str, _PayloadValue] | None = None,
+        payload: dict[str, PayloadValueT] | None = None,
         *,
         stages: Sequence[str] | None = None,
         timeout_s: float = 60.0,
@@ -265,7 +265,7 @@ class Coordinator:
 
     async def pause_generation(
         self,
-        payload: dict[str, _PayloadValue] | None = None,
+        payload: dict[str, PayloadValueT] | None = None,
         *,
         stages: Sequence[str] | None = None,
         timeout_s: float = 60.0,
@@ -279,7 +279,7 @@ class Coordinator:
 
     async def continue_generation(
         self,
-        payload: dict[str, _PayloadValue] | None = None,
+        payload: dict[str, PayloadValueT] | None = None,
         *,
         stages: Sequence[str] | None = None,
         timeout_s: float = 60.0,
@@ -293,7 +293,7 @@ class Coordinator:
 
     async def update_weights_from_disk(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValueT],
         *,
         stages: Sequence[str] | None = None,
         timeout_s: float = 120.0,
@@ -307,7 +307,7 @@ class Coordinator:
 
     async def init_weights_update_group(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValueT],
         *,
         stages: Sequence[str] | None = None,
         timeout_s: float = 300.0,
@@ -321,7 +321,7 @@ class Coordinator:
 
     async def destroy_weights_update_group(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValueT],
         *,
         stages: Sequence[str] | None = None,
         timeout_s: float = 300.0,
@@ -335,7 +335,7 @@ class Coordinator:
 
     async def update_weights_from_distributed(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValueT],
         *,
         stages: Sequence[str] | None = None,
         timeout_s: float = 300.0,
@@ -349,7 +349,7 @@ class Coordinator:
 
     async def weights_checker(
         self,
-        payload: dict[str, _PayloadValue] | None = None,
+        payload: dict[str, PayloadValueT] | None = None,
         *,
         stages: Sequence[str] | None = None,
         timeout_s: float = 120.0,

@@ -38,8 +38,8 @@ from sglang_omni.mps.state import MpsGpuPaths
 
 logger = logging.getLogger(__name__)
 
-_ArgsT = TypeVarTuple("_ArgsT")
-_ResultT = TypeVar("_ResultT")
+ArgsT = TypeVarTuple("ArgsT")
+ResultT = TypeVar("ResultT")
 
 
 class _MpsDeviceInfo(Protocol):
@@ -144,7 +144,7 @@ def _resolve_physical_plans(
                 "mps=on could not resolve the physical GPU mapping: " + detail
             )
         logger.warning(
-            "MPS auto: physical GPU mapping is incomplete (%s); running " "without MPS",
+            "MPS auto: physical GPU mapping is incomplete (%s); running without MPS",
             detail,
         )
         return {}
@@ -506,8 +506,8 @@ class MpsPipelineRuntime:
 
     @staticmethod
     async def _run_blocking(
-        call: Callable[[Unpack[_ArgsT]], _ResultT], *args: Unpack[_ArgsT]
-    ) -> _ResultT:
+        call: Callable[[Unpack[ArgsT]], ResultT], *args: Unpack[ArgsT]
+    ) -> ResultT:
         """Finish an ownership-changing call before propagating cancellation."""
 
         task = asyncio.create_task(asyncio.to_thread(call, *args))

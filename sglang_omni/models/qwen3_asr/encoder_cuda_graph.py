@@ -56,13 +56,13 @@ def build_buckets(max_batch: int, max_tokens_per_clip: int) -> tuple[int, ...]:
     return tuple(buckets)
 
 
-class _ReplayableGraph(Protocol):
+class ReplayableGraph(Protocol):
     def replay(self) -> None: ...
 
 
 @dataclass
 class _CapturedGraph:
-    graph: _ReplayableGraph  # the accelerator's graph type, named per backend
+    graph: ReplayableGraph  # the accelerator's graph type, named per backend
     hidden_states: torch.Tensor  # [bucket, hidden] static input
     cu_seqlens: torch.Tensor  # [max_windows + 1] static window boundaries
     attention_metadata: VisionAttentionMetadata | None

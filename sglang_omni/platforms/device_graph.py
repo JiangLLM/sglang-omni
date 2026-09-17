@@ -16,13 +16,13 @@ from typing import Any, Literal, Protocol, TypedDict
 import torch
 
 
-class _CudaCaptureKwargs(TypedDict, total=False):
+class CudaCaptureKwargs(TypedDict, total=False):
     pool: torch.cuda._POOL_HANDLE
     stream: torch.cuda.Stream
     capture_error_mode: Literal["thread_local"]
 
 
-class _XpuCaptureKwargs(TypedDict, total=False):
+class XpuCaptureKwargs(TypedDict, total=False):
     pool: torch.xpu._POOL_HANDLE
     stream: torch.xpu.Stream
 
@@ -53,7 +53,7 @@ class CudaDeviceGraphBackend:
         thread_local_errors: bool = False,
     ) -> Iterator[torch.cuda.CUDAGraph]:
         graph = torch.cuda.CUDAGraph()
-        kwargs: _CudaCaptureKwargs = {}
+        kwargs: CudaCaptureKwargs = {}
         if pool is not None:
             kwargs["pool"] = pool
         if stream is not None:
@@ -102,7 +102,7 @@ class XpuDeviceGraphBackend:
         # rejects it as a TypeError, so the request is dropped, not translated.
         del thread_local_errors
         graph = torch.xpu.XPUGraph()
-        kwargs: _XpuCaptureKwargs = {}
+        kwargs: XpuCaptureKwargs = {}
         if pool is not None:
             kwargs["pool"] = pool
         if stream is not None:

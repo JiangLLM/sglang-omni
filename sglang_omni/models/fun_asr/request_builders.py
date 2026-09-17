@@ -43,15 +43,15 @@ _MAX_GENERATION_TOKENS_AT_MAX_DURATION = 200
 _MIN_GENERATION_TOKENS = 16
 
 
-class _TokenizedPrompt(Protocol):
+class TokenizedPrompt(Protocol):
     @property
     def input_ids(self) -> Sized: ...
 
 
-class _PromptTokenizer(Protocol):
+class PromptTokenizer(Protocol):
     def __call__(
         self, text: str, /, *, add_special_tokens: Literal[False]
-    ) -> _TokenizedPrompt: ...
+    ) -> TokenizedPrompt: ...
 
 
 @dataclass
@@ -146,7 +146,7 @@ def _prompt_template(prompt_text: str, num_audio_tokens: int) -> str:
 
 
 def fun_asr_prompt_overhead_tokens(
-    tokenizer: _PromptTokenizer,
+    tokenizer: PromptTokenizer,
     *,
     language: str | None = None,
     itn: bool = True,

@@ -87,15 +87,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_PayloadValue = TypeVar("_PayloadValue")
+PayloadValue = TypeVar("PayloadValue")
 
 
-class _RequiredAdminActionResult(TypedDict):
+class RequiredAdminActionResult(TypedDict):
     success: bool
     message: str
 
 
-class _AdminActionResult(_RequiredAdminActionResult, total=False):
+class AdminActionResult(RequiredAdminActionResult, total=False):
     data: dict[str, Any] | WeightCheckResult
     error: str | None
 
@@ -1924,8 +1924,8 @@ class OmniScheduler:
         self._drain_inbox_for_request(request_id)
 
     def admin(
-        self, action: str, payload: dict[str, _PayloadValue] | None = None
-    ) -> _AdminActionResult:
+        self, action: str, payload: dict[str, PayloadValue] | None = None
+    ) -> AdminActionResult:
         payload = dict(payload or {})
         if self._should_enqueue_admin():
             return self._enqueue_admin(action, payload)
@@ -1939,13 +1939,11 @@ class OmniScheduler:
             and threading.get_ident() != scheduler_thread_id
         )
 
-    def _enqueue_admin(
-        self, action: str, payload: dict[str, Any]
-    ) -> _AdminActionResult:
+    def _enqueue_admin(self, action: str, payload: dict[str, Any]) -> AdminActionResult:
         timeout_s = float(payload.get("_admin_timeout_s", 300.0))
         queued_payload = dict(payload)
         queued_payload.pop("_admin_timeout_s", None)
-        response_queue: _queue_mod.Queue[_AdminActionResult] = _queue_mod.Queue(
+        response_queue: _queue_mod.Queue[AdminActionResult] = _queue_mod.Queue(
             maxsize=1
         )
         self._admin_queue.put((action, queued_payload, response_queue))
@@ -1979,8 +1977,8 @@ class OmniScheduler:
         return processed
 
     def _run_admin_action(
-        self, action: str, payload: dict[str, _PayloadValue] | None = None
-    ) -> _AdminActionResult:
+        self, action: str, payload: dict[str, PayloadValue] | None = None
+    ) -> AdminActionResult:
         payload = dict(payload or {})
         if action == ADMIN_MODEL_INFO:
             return self._admin_model_info()
@@ -2006,7 +2004,7 @@ class OmniScheduler:
             "data": {"skipped": True, "unsupported": True},
         }
 
-    def _admin_model_info(self) -> _AdminActionResult:
+    def _admin_model_info(self) -> AdminActionResult:
         info = self.model_worker.model_info()
         with self._request_admission_lock:
             request_build_pending = len(self._pending_request_builds)
@@ -2036,8 +2034,8 @@ class OmniScheduler:
         return {"success": True, "message": "ok", "data": info}
 
     def _admin_pause_generation(
-        self, payload: dict[str, _PayloadValue]
-    ) -> _AdminActionResult:
+        self, payload: dict[str, PayloadValue]
+    ) -> AdminActionResult:
         mode = str(payload.get("mode") or "abort")
         if mode not in {"abort", "retract", "in_place"}:
             return {
@@ -2066,8 +2064,8 @@ class OmniScheduler:
         }
 
     def _admin_continue_generation(
-        self, payload: dict[str, _PayloadValue]
-    ) -> _AdminActionResult:
+        self, payload: dict[str, PayloadValue]
+    ) -> AdminActionResult:
         with self._admin_lock:
             if bool(payload.get("torch_empty_cache", True)):
                 self._empty_torch_cache()
@@ -2080,8 +2078,8 @@ class OmniScheduler:
         }
 
     def _admin_update_weights_from_disk(
-        self, payload: dict[str, _PayloadValue]
-    ) -> _AdminActionResult:
+        self, payload: dict[str, PayloadValue]
+    ) -> AdminActionResult:
         return self._run_weight_update_with_lifecycle(
             payload,
             self.model_worker.update_weights_from_disk,
@@ -2094,12 +2092,12 @@ class OmniScheduler:
 
     def _run_weight_update_with_lifecycle(
         self,
-        payload: dict[str, _PayloadValue],
+        payload: dict[str, PayloadValue],
         update_fn,
         result_data: dict[str, Any],
         *,
         keep_pause_on_failure: bool = False,
-    ) -> _AdminActionResult:
+    ) -> AdminActionResult:
         keep_pause = bool(payload.get("keep_pause", False))
         keep_engine_paused = keep_pause
         with self._admin_lock:
@@ -2176,8 +2174,8 @@ class OmniScheduler:
         }
 
     def _admin_update_weights_from_tensor(
-        self, payload: dict[str, _PayloadValue]
-    ) -> _AdminActionResult:
+        self, payload: dict[str, PayloadValue]
+    ) -> AdminActionResult:
         return self._run_weight_update_with_lifecycle(
             payload,
             self.model_worker.update_weights_from_tensor,
@@ -2188,8 +2186,8 @@ class OmniScheduler:
         )
 
     def _admin_update_weights_from_distributed(
-        self, payload: dict[str, _PayloadValue]
-    ) -> _AdminActionResult:
+        self, payload: dict[str, PayloadValue]
+    ) -> AdminActionResult:
         return self._run_weight_update_with_lifecycle(
             payload,
             self.model_worker.update_weights_from_distributed,
@@ -2201,8 +2199,8 @@ class OmniScheduler:
         )
 
     def _admin_init_weights_update_group(
-        self, payload: dict[str, _PayloadValue]
-    ) -> _AdminActionResult:
+        self, payload: dict[str, PayloadValue]
+    ) -> AdminActionResult:
         # Note (Xuesong): init blocks on a NCCL/TCP rendezvous and runs on the
         # scheduler serving thread (admin is drained inline in the event loop), so
         # the serving loop is frozen until the trainer (rank 0) joins. sglang's
@@ -2224,8 +2222,8 @@ class OmniScheduler:
         }
 
     def _admin_destroy_weights_update_group(
-        self, payload: dict[str, _PayloadValue]
-    ) -> _AdminActionResult:
+        self, payload: dict[str, PayloadValue]
+    ) -> AdminActionResult:
         with self._admin_lock:
             success, message = self.model_worker.destroy_weights_update_group(payload)
         return {
@@ -2236,8 +2234,8 @@ class OmniScheduler:
         }
 
     def _admin_weights_checker(
-        self, payload: dict[str, _PayloadValue]
-    ) -> _AdminActionResult:
+        self, payload: dict[str, PayloadValue]
+    ) -> AdminActionResult:
         action = str(payload.get("action") or "checksum")
         with self._admin_lock:
             data = self.model_worker.weights_checker(action)

@@ -46,17 +46,17 @@ _LANGUAGE_ALIASES = {
 }
 
 
-class _IndexableTokenIds(Protocol):
+class IndexableTokenIds(Protocol):
     def __getitem__(self, index: int, /) -> int: ...
 
 
-class _PrefixTokenizer(Protocol):
+class PrefixTokenizer(Protocol):
     def set_prefix_tokens(
         self, *, language: str, task: str, predict_timestamps: bool
     ) -> object: ...
 
     @property
-    def prefix_tokens(self) -> Iterable[int] | _IndexableTokenIds: ...
+    def prefix_tokens(self) -> Iterable[int] | IndexableTokenIds: ...
 
 
 @dataclass
@@ -111,7 +111,7 @@ def _build_logit_bias(generation_config: GenerationConfig) -> dict[str, float] |
 
 
 def _build_prefix_tokens(
-    tokenizer: _PrefixTokenizer,
+    tokenizer: PrefixTokenizer,
     *,
     language: str,
     task: str,
