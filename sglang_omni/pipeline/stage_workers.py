@@ -35,6 +35,7 @@ from sglang_omni.pipeline.tp_control import (
 )
 from sglang_omni.platforms import current_platform, get_platform_spec
 from sglang_omni.proto import AbortMessage, AdminResultMessage
+from sglang_omni.scheduling.messages import StageScheduler
 from sglang_omni.utils.gpu_compat import (
     apply_gpu_compat_env_defaults,
     get_gpu_compat_env_defaults,
@@ -868,7 +869,7 @@ def _construct_scheduler(
     spec: StageLaunchConfig,
     gpu_id: int | None,
     log: logging.Logger,
-) -> Any:
+) -> StageScheduler:
     """Build a scheduler, serializing GPU factory work per visible device."""
 
     from sglang_omni.scheduling.stage_kv_budget import stage_kv_cache_budget
@@ -890,7 +891,7 @@ def _construct_scheduler(
         stage_name=spec.stage_name,
     )
 
-    def _invoke() -> Any:
+    def _invoke() -> StageScheduler:
         if kv_cache_bytes is None:
             return factory(**factory_args)
         with stage_kv_cache_budget(spec.stage_name, kv_cache_bytes):

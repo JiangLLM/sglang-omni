@@ -20,7 +20,7 @@ _ABORTED_REQUEST_ID_LIMIT = 10000
 _ABORTED_REQUEST_ID_RETAINED = 5000
 
 
-class _CountingInbox(_queue_mod.Queue):
+class _CountingInbox(_queue_mod.Queue[IncomingMessage]):
     """Track queued and claimed ``new_request`` ids."""
 
     def _init(self, maxsize: int) -> None:

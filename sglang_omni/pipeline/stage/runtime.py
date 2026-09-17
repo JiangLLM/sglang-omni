@@ -59,7 +59,7 @@ from sglang_omni.proto import (
     SubmitMessage,
 )
 from sglang_omni.relay.base import Relay
-from sglang_omni.scheduling.messages import IncomingMessage
+from sglang_omni.scheduling.messages import IncomingMessage, StageScheduler
 
 TorchProfiler = current_platform.get_torch_profiler()
 
@@ -112,7 +112,7 @@ class Stage:
         input_handler: InputHandler | None = None,
         relay: Relay | None = None,
         comm_config: dict[str, CommConfigValueT] | None = None,
-        scheduler: Any = None,
+        scheduler: StageScheduler | None = None,
         project_payload: dict[str, Callable[[Any], Any]] | None = None,
         stream_targets: list[str] | None = None,
         get_stream_done_targets: GetStreamDoneTargetsFn | None = None,
