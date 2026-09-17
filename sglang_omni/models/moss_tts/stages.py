@@ -457,7 +457,8 @@ def create_preprocessing_executor(
         compute_dtype=resolved_compute_dtype,
         attention_backend=attention_backend,
     )
-    reference_encoder: Any = _BatchedReferenceEncoder(
+    reference_encoder: _BatchedReferenceEncoder | _MossTTSReferenceEncoder
+    reference_encoder = _BatchedReferenceEncoder(
         audio_encoder,
         n_vq=int(processor.model_config.n_vq),
         max_batch_size=encode_batch_size,
