@@ -11,7 +11,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import count
-from typing import Any, Literal, Mapping, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Mapping, TypeVar
 
 import torch
 
@@ -37,6 +37,9 @@ from sglang_omni.scheduling.streaming_vocoder import (
 )
 from sglang_omni.utils.audio_payload import audio_waveform_payload
 from sglang_omni.utils.cuda_staging import GrowablePinnedBuffer, PinnedTransferSlot
+
+if TYPE_CHECKING:
+    from qwen_tts import Qwen3TTSTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -514,7 +517,7 @@ class Qwen3TTSStreamingVocoderScheduler(
 
     def __init__(
         self,
-        tokenizer: Any,
+        tokenizer: "Qwen3TTSTokenizer",
         *,
         device: str,
         stream_stride: int = DEFAULT_QWEN3_TTS_STREAM_STRIDE,
