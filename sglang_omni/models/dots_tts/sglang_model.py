@@ -9,6 +9,8 @@ from typing import Any
 
 import torch
 from sglang.srt.layers.logits_processor import LogitsProcessorOutput
+from sglang.srt.layers.quantization.base_config import QuantizationConfig
+from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 from sglang.srt.models.qwen2 import Qwen2ForCausalLM
 from torch import nn
 
@@ -23,7 +25,12 @@ class DotsTTSSGLangModel(nn.Module):
     # __new__) resolve the graph-feedback probe to "disabled".
     _graph_feedback_buffer: torch.Tensor | None = None
 
-    def __init__(self, config: Any, quant_config: Any = None, prefix: str = "") -> None:
+    def __init__(
+        self,
+        config: Any,
+        quant_config: QuantizationConfig | None = None,
+        prefix: str = "",
+    ) -> None:
         super().__init__()
         self.config = config
         llm_config = getattr(config, "llm_config", None)
@@ -109,7 +116,7 @@ class DotsTTSSGLangModel(nn.Module):
         self,
         input_ids: torch.Tensor,
         positions: torch.Tensor,
-        forward_batch: Any,
+        forward_batch: ForwardBatch,
         input_embeds: torch.Tensor | None = None,
         **kwargs: Any,
     ) -> LogitsProcessorOutput:
