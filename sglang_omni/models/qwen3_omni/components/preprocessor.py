@@ -8,7 +8,7 @@ import base64
 import json
 import logging
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import torch
 import xxhash
@@ -38,6 +38,9 @@ from sglang_omni.preprocessing.resource_connector import (
 )
 from sglang_omni.profiler.event_recorder import emit as _emit_event
 from sglang_omni.proto import StagePayload
+
+if TYPE_CHECKING:
+    from transformers import BatchFeature, PreTrainedTokenizerBase
 
 logger = logging.getLogger(__name__)
 
@@ -230,11 +233,13 @@ class Qwen3OmniPreprocessor:
             else {}
         )
         try:
-            self.processor = Qwen3OmniMoeProcessor.from_pretrained(
-                self.model_dir,
-                trust_remote_code=True,
-                local_files_only=True,
-                **compat_kwargs,
+            self.processor: Qwen3OmniMoeProcessor = (
+                Qwen3OmniMoeProcessor.from_pretrained(
+                    self.model_dir,
+                    trust_remote_code=True,
+                    local_files_only=True,
+                    **compat_kwargs,
+                )
             )
         except TypeError:
             if not compat_kwargs:
@@ -259,7 +264,7 @@ class Qwen3OmniPreprocessor:
                 local_files_only=False,
             )
             self.model_dir = str(resolve_model_path(model_path, local_files_only=False))
-        self.tokenizer = self.processor.tokenizer
+        self.tokenizer: "PreTrainedTokenizerBase" = self.processor.tokenizer
         ensure_chat_template(
             self.tokenizer,
             model_path=self.model_dir,
@@ -661,7 +666,7 @@ class Qwen3OmniPreprocessor:
         if videos_kwargs:
             processor_kwargs["videos_kwargs"] = videos_kwargs
 
-        hf_inputs = self.processor(
+        hf_inputs: "BatchFeature" = self.processor(
             text=prompt_text,
             images=images or None,
             videos=videos or None,
