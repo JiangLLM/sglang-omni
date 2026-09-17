@@ -13,7 +13,6 @@ True).
 from __future__ import annotations
 
 import contextlib
-from typing import Any
 
 import torch
 
@@ -94,7 +93,7 @@ class PinnedTransferSlot:
     ) -> None:
         self.device = _normalize_device(device)
         self._buffer = GrowablePinnedBuffer(dtype, initial_capacity=initial_capacity)
-        self._event: Any = None
+        self._event: torch.cuda.Event | None = None
         # Note (jiannan-17): True only while the most recent ``record()``
         # succeeded. The event object alone cannot tell "never recorded" from
         # "the last record() raised", and CUDA reports an event whose record
@@ -144,7 +143,7 @@ class PinnedTransferSlot:
             self._event.record(stream)
         self._recorded = True
 
-    def _recorded_event(self) -> Any:
+    def _recorded_event(self) -> torch.cuda.Event:
         if not self._recorded:
             raise RuntimeError(
                 "transfer event was not recorded: no record() has succeeded on "
