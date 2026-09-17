@@ -21,6 +21,7 @@ from torch.nn.utils.parametrize import is_parametrized, remove_parametrizations
 if TYPE_CHECKING:
     from cosyvoice.flow.flow import CausalMaskedDiffWithDiT
     from cosyvoice.flow.flow_matching import ConditionalCFM
+    from cosyvoice.hifigan.generator import CausalHiFTGenerator
 
     from sglang_omni.models.fun_cosyvoice3.mlx.vocoder import FunCosyVoice3MlxVocoder
     from sglang_omni.models.fun_cosyvoice3.streaming_vocoder import (
@@ -94,7 +95,7 @@ FLOW_CUDA_GRAPH_FRAME_BUCKET = 16
 class MpsHiFTAdapter:
     """Keep HiFT's float64 F0 branch on CPU while decoding on MPS."""
 
-    def __init__(self, hift: Any, device: str) -> None:
+    def __init__(self, hift: "CausalHiFTGenerator", device: str) -> None:
         self.hift = hift
         self.device = torch.device(device)
         self.f0_predictor = hift.f0_predictor
@@ -106,11 +107,13 @@ class MpsHiFTAdapter:
     def __getattr__(self, name: str) -> Any:
         return getattr(self.hift, name)
 
-    def parameters(self):
+    def parameters(self) -> Iterator[torch.nn.Parameter]:
         return self.hift.parameters()
 
     @torch.inference_mode()
-    def inference(self, speech_feat: torch.Tensor, finalize: bool = True):
+    def inference(
+        self, speech_feat: torch.Tensor, finalize: bool = True
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         cpu_features = speech_feat.detach().to(device="cpu")
         f0 = self.f0_predictor(
             cpu_features.to(dtype=torch.float64),
@@ -883,7 +886,7 @@ def load_cosyvoice3_flow_hift(
     fp16: bool = False,
     *,
     enable_flow_estimator_trt: bool = False,
-) -> tuple[FunCosyVoice3Flow, torch.nn.Module]:
+) -> "tuple[FunCosyVoice3Flow, CausalHiFTGenerator | MpsHiFTAdapter]":
     if torch.device(device).type == "mps":
         return load_cosyvoice3_flow_hift_lightweight(checkpoint_dir, device=device)
     # note (db-ol): the first modelscope import sets every root StreamHandler
@@ -1006,7 +1009,7 @@ def patch_causal_conv_cache() -> None:
     CAUSAL_CONV_CACHE_PATCHED = True
 
 
-def keep_hift_constants_on_device(hift: torch.nn.Module, device: str) -> None:
+def keep_hift_constants_on_device(hift: "CausalHiFTGenerator", device: str) -> None:
     # note(ratish): plain attributes, not buffers, so hift.to(device) leaves
     # them on the CPU and every HiFT call copies them to the device again.
     hift.stft_window = hift.stft_window.to(device)
@@ -1022,7 +1025,7 @@ def load_cosyvoice3_flow_hift_lightweight(
     checkpoint_dir: str,
     *,
     device: str,
-) -> tuple[FunCosyVoice3Flow, Any]:
+) -> "tuple[FunCosyVoice3Flow, CausalHiFTGenerator | MpsHiFTAdapter]":
     """Load only Flow and HiFT for CPU/MPS without constructing a second LLM."""
     try:
         from hyperpyyaml import load_hyperpyyaml
@@ -1345,7 +1348,7 @@ class CosyVoice3Vocoder(
     def __init__(
         self,
         flow: FunCosyVoice3Flow | CausalMaskedDiffWithDiT,
-        hift: torch.nn.Module,
+        hift: "CausalHiFTGenerator | MpsHiFTAdapter",
         autocast_dtype: torch.dtype | None = None,
         hift_dtype: str = "float32",
         hift_max_padding_waste: float = 1.5,
