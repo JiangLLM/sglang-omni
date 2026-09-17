@@ -10,7 +10,7 @@ Each stage is a SimpleScheduler compute-fn over a Zonos2State dict carried in
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -31,6 +31,12 @@ from sglang_omni.proto import StagePayload
 from sglang_omni.scheduling.pipeline_state import build_usage, store_state
 from sglang_omni.scheduling.simple_scheduler import SimpleScheduler
 from sglang_omni.utils.audio_payload import audio_waveform_payload
+
+if TYPE_CHECKING:
+    from sglang_omni.models.zonos2.components.streaming_vocoder import (
+        Zonos2StreamingVocoderScheduler,
+    )
+    from sglang_omni.scheduling.omni_scheduler import OmniScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +130,7 @@ def create_vocoder_executor(
     gpu_id: int | None = None,
     dac_batch: bool = False,
     vocoder_warmup: bool = False,
-) -> Any:
+) -> "Zonos2StreamingVocoderScheduler":
     from sglang_omni.models.zonos2.components.streaming_vocoder import (
         Zonos2StreamingVocoderScheduler,
         decode_batch,
@@ -135,7 +141,7 @@ def create_vocoder_executor(
     device = str(resolve_concrete_device(device, gpu_id))
 
     def _result_payload(
-        payload: StagePayload, state: Zonos2State, pcm: Any
+        payload: StagePayload, state: Zonos2State, pcm: torch.Tensor
     ) -> StagePayload:
         pcm_np = (
             pcm.detach().cpu().numpy()
@@ -241,7 +247,7 @@ def create_sglang_omni_tts_engine_executor(
     max_running_requests: int = 16,
     cuda_graph_max_bs: int = 16,
     server_args_overrides: dict | None = None,
-) -> Any:
+) -> "OmniScheduler":
     from sglang_omni.models.zonos2.engine_builder import Zonos2EngineBuilder
 
     return Zonos2EngineBuilder(
