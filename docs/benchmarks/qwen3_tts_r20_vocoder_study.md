@@ -967,3 +967,25 @@ gate、具名音色必须带 voice 而克隆臂必须不带、workflow 的 rotat
 **skeptic 修正的三句话**:bench 报告说"fused atomic split-K 在 BLOCK_M=64 出确定性错误",实际错的是 BLOCK_M=16(M∈{2,4,8})且 REDUCE=0 的 74 个配置,M=48 全部通过,没有胜出配置用到这条路径,但混合派发不能碰它;down 行的误差对比把带残差的 Triton 和不带残差的 cuBLAS 放在一起,换成同 epilogue 的 cuBLAS 对照后 Triton 更低;"阈值任何 kernel 都不可达"改成"已测的都没达到"。
 
 **教训**:阈值要在同一 harness 里先量流式下限再定,报告第 3 节 C4 的"按数据时间加 1.3 us 固定开销定价"低估了固定开销(实测空 kernel 1.17-1.47 us,流式读 4.19 MB 需 3.19 us,即约 1.9 us 固定 + bytes/3.25 TB/s)。
+
+## 第十九轮(下):E2、#2123、C1 在 H100 上的实测,两个 PR(2026-09-16 至 09-17 PT)
+
+**环境**:eval-h100 在 09-16 宕机,改到 Tilde(worker-29,H100 HBM3,驱动 580)。用 uv venv 从零配环境,坑记在 memory `tilde-sglang-omni-venv-recipe`。
+Tilde 的绝对延迟比 eval-h100 的 Docker 环境差约 20%,所以只做同机配对 A/B:单卡、各臂顺序跑、每臂重启服务,3 个客户端 seed,rps 1 和 rps 20,预热 30 s、计量 60 s。
+run 根目录:`tilde:/home/guests/zhen/jaxan/runs/20260916-qtts-e2/`(`outputs/`、`prof/`、`logs/`)。
+
+**E2(eval-h100,09-14 到 15,5 臂 x 3 seed,基于 442e559b)**:首块 COLD 宽度编译后,rps 1 首帧 p50 -2.5 ms,rps 20 -2.9 ms。自适应初始等待在 rps 20 再 -2.5 ms,rps 1 在噪声内。
+WARM ramp 宽度编译和 cudnn benchmark 让 vocoder GPU 时间下降(B8 replay 6.4 → 3.6 ms、B4 5.3 → 2.4 ms,`implicit_convolve_sgemm` 清零),但用户侧延迟和 underrun 都没有变化,所以不上。
+Tilde 上在当前 main 复核 PR 分支,rps 20 首帧 p50 56.9/56.5/56.6 → 51.2/51.7/50.7,rps 1 32.0-32.1 → 29.8-31.0。
+**输出一致性**:codes 不变(56 条长度全部一致,首秒相关 1.0000)。首块改走编译内核后,和整段解码相比 eager 增量是 39.6 dB,编译增量是 34.2 dB,首块从前者降到后者。main 的稳态块本来就在后者这一档。编译内核比 eager 低 5 dB 的原因还没查,值得单列。
+测量上踩的坑:4 路并发会让一个 main 样本在冷启动时卡 8 秒、打乱批次,22 条的长度都变了,这个样本作废;杀服务必须杀整棵进程树。→ **PR #2217**。
+
+**#2123(Ratish1,09-16 合入)**:同节点对比合入之前的 main,rps 1 首帧 p50 38.9 → 31.7 ms,rps 20 64.7 → 56.0 ms,rps 20 可闻 p50 78.9 → 58.0 ms,underrun 2.0-2.5% → 0-0.5%。
+rps 20 trace 里每个 decode 步 p50 7.9 ms = talker 图 2.3 + predictor 图 4.1 + 空洞 0.1 ms(占 2%);剖面报告里是空洞 4.55 ms、步长 12.9 ms。**第十八轮的 CPU 空洞瓶颈已经消除**,p95 仍有 12 ms,集中在 prefill 和准入那几轮。现在步长里最大的一块是 predictor。
+
+**C1(准入同轮进队)**:`process_input_requests` 在取批次之前,对本轮提交的 build 最多等 2 ms。3 个 seed 配对,rps 20 首帧 p50 51.9/56.2/56.0 → 43.9/47.2/47.6 ms(-8.0/-9.0/-8.4),可闻 p50 -8.4/-9.8/-7.9,rps 1 与 underrun 不变。main 在 C1 臂之后又跑了两次,差异不到 1 ms,说明没有漂移。→ **PR #2216**。
+坑:只开请求事件记录(不开 torch)也会在 rps 20 把服务拖垮(40 秒写了 7.1 万条事件),那一轮 seed 作废后重测。事件数据只能在不计量的 run 里采。
+
+**准入时间线(main 已含 #2123,rps 20,p50;来自被干扰的那一轮,只作量级参考)**:请求到达 → build 开始 6.3 ms(要等下一轮循环) | build 2.2 ms(p95 9.9) | build 完 → 进队列 7.5 ms(C1 针对这段) | 进队列 → prefill 7.8 ms(疑似在飞请求顶到 48 的上限)。
+
+**下一步**:predictor 在每个 decode 步里占 4.1 ms,是 C5(glue 融合 + 短上下文 attention)、C6(采样内核)、C7(双 token prologue)的目标;准入的另外两段(到达后等循环、进队列后等位置)还没有候选,需要先拆开看。
