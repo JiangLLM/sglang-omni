@@ -20,6 +20,8 @@ from sglang_omni.scheduling.generation_batch_policy import CudaGraphBackend
 from sglang_omni.utils.gpu_compat import get_visible_gpu_sm_version
 
 if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
+
     from sglang_omni.models.arkasr.request_builders import ArkASRRequestData
     from sglang_omni.models.arkasr.sglang_model import ArkasrForConditionalGeneration
     from sglang_omni.proto import StagePayload
@@ -97,7 +99,7 @@ class ArkasrEngineBuilder(AsrEngineBuilder):
         self.pre_lm_max_pending = pre_lm_max_pending
         self.enable_encoder_cuda_graph = enable_encoder_cuda_graph
         self.stream_emit_interval_s = stream_emit_interval_s
-        self.tokenizer: Any = None
+        self.tokenizer: "PreTrainedTokenizerBase | None" = None
         self.feature_extractor: WhisperFeatureExtractor | None = None
         self.merge_factor = 4
         self.audio_token_id = 151663
