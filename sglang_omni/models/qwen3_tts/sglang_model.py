@@ -10,7 +10,7 @@ import os
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Iterable, Literal, Optional, Tuple, TypeAlias
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional, Tuple, TypeAlias
 
 import torch
 from sglang.kernels.fused_op import get_fused_op_backend
@@ -49,6 +49,9 @@ from sglang_omni.vendor.sglang.core import ForwardBatch
 from sglang_omni.vendor.sglang.layers import ReplicatedLinear, RMSNorm
 from sglang_omni.vendor.sglang.models import FusedSetKVBufferArg, apply_qk_norm
 from sglang_omni.vendor.sglang.server_args import get_global_server_args
+
+if TYPE_CHECKING:
+    from qwen_tts import Qwen3TTSTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -424,13 +427,15 @@ class Qwen3TTSPromptBuilderMixin:
     def dtype(self) -> torch.dtype:
         return self.model.codec_embedding.weight.dtype
 
-    def get_input_embeddings(self):
+    def get_input_embeddings(self) -> nn.Embedding:
         return self.model.get_input_embeddings()
 
-    def get_text_embeddings(self):
+    def get_text_embeddings(self) -> nn.Embedding:
         return self.model.get_text_embeddings()
 
-    def load_speech_tokenizer(self, speech_tokenizer: Any) -> None:
+    def load_speech_tokenizer(
+        self, speech_tokenizer: "Qwen3TTSTokenizer | None"
+    ) -> None:
         self.speech_tokenizer = speech_tokenizer
 
     def get_supported_languages(self):
