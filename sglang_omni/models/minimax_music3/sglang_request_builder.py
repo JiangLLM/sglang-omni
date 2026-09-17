@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -19,6 +19,9 @@ from .constants import MAX_PROMPT_TOKENS
 from .payload_types import MiniMaxMusic3State
 from .prompt import AUDIO_CODE_OFFSET, SPECIAL_TOKEN_IDS
 from .request_builders import build_ttm_state
+
+if TYPE_CHECKING:
+    from sglang_omni.models.minimax_music3.model_runner import MiniMaxMusic3ARState
 
 _C0_VOCAB_SIZE = 16384
 _CFG_UNCOND_RID_SUFFIX = "-cfg"
@@ -41,7 +44,7 @@ class MiniMaxMusic3SGLangRequestData(SGLangARRequestData):
     is_cfg_uncond: bool = False
     prompt_token_ids: torch.Tensor | None = None
     prompt_tokens: int = 0
-    ar_state: Any = None
+    ar_state: "MiniMaxMusic3ARState | None" = None
     engine_start_s: float = 0.0
 
 

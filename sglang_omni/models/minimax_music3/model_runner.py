@@ -102,7 +102,7 @@ class _HiddenFrameBuffer:
 
 
 @dataclass
-class _ARState:
+class MiniMaxMusic3ARState:
     """Per-request AR state owned by the runner for one generation."""
 
     sampling_seed: int
@@ -234,7 +234,7 @@ class MiniMaxMusic3ModelRunner(ModelRunner):
         self._advance(result, requests, emit=True)
 
     def on_request_finished(self, request_id: str, req_data: Any) -> None:
-        ar_state: _ARState | None = req_data.ar_state
+        ar_state: MiniMaxMusic3ARState | None = req_data.ar_state
         self._request_data.pop(request_id, None)
         if ar_state is None:
             return
@@ -359,7 +359,7 @@ class MiniMaxMusic3ModelRunner(ModelRunner):
         del device
         state = data.minimax_state
         decode_limit = int(state.max_audio_frames)
-        data.ar_state = _ARState(
+        data.ar_state = MiniMaxMusic3ARState(
             sampling_seed=derive_sampling_seed(_SAMPLING_NAMESPACE, state.seed),
             seed=state.seed,
             decode_limit=decode_limit,
@@ -373,7 +373,7 @@ class MiniMaxMusic3ModelRunner(ModelRunner):
 
     @staticmethod
     def _record_reference_ranks(
-        ar_states: list[_ARState],
+        ar_states: list[MiniMaxMusic3ARState],
         c0_logits: torch.Tensor,
         forced: torch.Tensor,
         depth_ranks: torch.Tensor,
@@ -405,7 +405,7 @@ class MiniMaxMusic3ModelRunner(ModelRunner):
         return torch.load(path, weights_only=True)
 
     def _forced_codes_for(
-        self, ar_states: list[_ARState], device: torch.device
+        self, ar_states: list[MiniMaxMusic3ARState], device: torch.device
     ) -> torch.Tensor | None:
         """Stack this step's reference codes, one row per request."""
         if self._forced_codes_dir is None:
@@ -423,15 +423,15 @@ class MiniMaxMusic3ModelRunner(ModelRunner):
         return torch.stack(rows).to(device=device)
 
     @staticmethod
-    def _ar_state(request: SchedulerRequest) -> _ARState:
-        ar_state: _ARState | None = request.data.ar_state
+    def _ar_state(request: SchedulerRequest) -> MiniMaxMusic3ARState:
+        ar_state: MiniMaxMusic3ARState | None = request.data.ar_state
         if ar_state is None:
             raise RuntimeError(
                 f"MiniMax Music 3 request {request.request_id} has no AR state"
             )
         return ar_state
 
-    def _log_progress(self, request_id: str, ar_state: _ARState) -> None:
+    def _log_progress(self, request_id: str, ar_state: MiniMaxMusic3ARState) -> None:
         interval = max(
             1, min(250, max(1, ar_state.decode_limit // _PROGRESS_LOG_DIVISOR))
         )
@@ -441,7 +441,9 @@ class MiniMaxMusic3ModelRunner(ModelRunner):
             f"MiniMax Music 3 AR progress request={request_id} frames={ar_state.generated_frames}/{ar_state.decode_limit} elapsed={time.perf_counter() - ar_state.started_s:.1f}s"
         )
 
-    def _emit_ready_window(self, request_id: str, ar_state: _ARState) -> None:
+    def _emit_ready_window(
+        self, request_id: str, ar_state: MiniMaxMusic3ARState
+    ) -> None:
         """Emit the next window once one frame of lookahead proves it is not
         the final one; the tail is flushed in on_request_finished."""
         start = ar_state.emitted_windows * AR_CHUNK_HOP_FRAMES
@@ -463,7 +465,7 @@ class MiniMaxMusic3ModelRunner(ModelRunner):
     def _emit_window(
         self,
         request_id: str,
-        ar_state: _ARState,
+        ar_state: MiniMaxMusic3ARState,
         window: ChunkWindow,
         *,
         is_final: bool,
@@ -492,7 +494,7 @@ class MiniMaxMusic3ModelRunner(ModelRunner):
             f"MiniMax Music 3 AR emitted request={request_id} chunk={window.index} frames={window.length} frame_range=[{window.start},{window.end}) final={is_final}"
         )
 
-    def _dump_reference_ranks(self, ar_state: _ARState) -> None:
+    def _dump_reference_ranks(self, ar_state: MiniMaxMusic3ARState) -> None:
         if self._dump_dir is None or not ar_state.reference_ranks:
             return
         os.makedirs(self._dump_dir, exist_ok=True)
