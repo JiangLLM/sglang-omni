@@ -10,7 +10,7 @@ import os
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Iterable, Optional, Tuple
+from typing import Any, Iterable, Literal, Optional, Tuple, TypeAlias
 
 import torch
 from sglang.kernels.fused_op import get_fused_op_backend
@@ -51,6 +51,13 @@ from sglang_omni.vendor.sglang.models import FusedSetKVBufferArg, apply_qk_norm
 from sglang_omni.vendor.sglang.server_args import get_global_server_args
 
 logger = logging.getLogger(__name__)
+
+PredictorGraphSignature: TypeAlias = tuple[
+    Literal["argmax", "sampled"], int, bool, bool, bool
+]
+PredictorGraphKey: TypeAlias = tuple[
+    int, Literal["argmax", "sampled"], int, bool, bool, bool
+]
 
 QTTS_PREDICTOR_GRAPH_ENV = "SGLANG_OMNI_QTTS_PREDICTOR_GRAPH"
 _PREDICTOR_GRAPH_MAX_LAZY_KEYS = 32
@@ -159,7 +166,7 @@ class _PredictorDecodeGraph:
     def __init__(
         self,
         batch_size: int,
-        signature: tuple,
+        signature: PredictorGraphSignature,
         *,
         device: torch.device,
         hidden_size: int,
@@ -1013,8 +1020,8 @@ class Qwen3TTSTalker(Qwen3TTSPromptBuilderMixin, nn.Module):
             server_args,
             max_batch_size=max_batch_size,
         )
-        self._predictor_graphs: dict[tuple, _PredictorDecodeGraph] = {}
-        self._predictor_graph_disabled: set[tuple] = set()
+        self._predictor_graphs: dict[PredictorGraphKey, _PredictorDecodeGraph] = {}
+        self._predictor_graph_disabled: set[PredictorGraphKey] = set()
         # note(ratish): None until the startup capture, which runs before the
         # KV pool is sized, or the first decode resolves it.
         self._predictor_graph_enabled: bool | None = None
@@ -1238,7 +1245,7 @@ class Qwen3TTSTalker(Qwen3TTSPromptBuilderMixin, nn.Module):
         self,
         batch_size: int,
         semantic_positions: torch.Tensor | None,
-    ) -> tuple | None:
+    ) -> PredictorGraphSignature | None:
         if semantic_positions is not None:
             if not semantic_positions.is_cuda:
                 return None
@@ -1263,7 +1270,7 @@ class Qwen3TTSTalker(Qwen3TTSPromptBuilderMixin, nn.Module):
 
     @contextmanager
     def _predictor_graph_capture_state(
-        self, bucket_size: int, signature: tuple
+        self, bucket_size: int, signature: PredictorGraphSignature
     ) -> Generator[None, None, None]:
         saved = (
             self._sub_batch_size,
@@ -1329,6 +1336,7 @@ class Qwen3TTSTalker(Qwen3TTSPromptBuilderMixin, nn.Module):
             self._predictor_graph_enabled = self._resolve_predictor_graph_enabled()
         if not self._predictor_graph_enabled:
             return 0
+        signatures: list[PredictorGraphSignature]
         if do_sample:
             max_top_k, has_top_p, has_unbounded_top_k = _predictor_signature_terms(
                 [int(top_k)],
@@ -1367,7 +1375,7 @@ class Qwen3TTSTalker(Qwen3TTSPromptBuilderMixin, nn.Module):
     def _capture_predictor_graph(
         self,
         bucket_size: int,
-        signature: tuple,
+        signature: PredictorGraphSignature,
     ) -> _PredictorDecodeGraph:
         """One stream per talker for warmups and captures: the allocator only
         reuses a pool block on the stream that freed it. Automatic collection
