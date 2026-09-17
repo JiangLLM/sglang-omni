@@ -27,7 +27,10 @@ if TYPE_CHECKING:
 
     from sglang_omni.model_runner.model_worker import ModelWorker
     from sglang_omni.models.moss_tts.request_builders import MossTTSSGLangRequestData
-    from sglang_omni.models.moss_tts.sglang_model import MossTTSDelaySGLangModel
+    from sglang_omni.models.moss_tts.sglang_model import (
+        ChannelLogitsList,
+        MossTTSDelaySGLangModel,
+    )
     from sglang_omni.scheduling.sglang_backend.output_processor import (
         SGLangOutputProcessor,
     )
@@ -297,7 +300,7 @@ class MossTTSModelRunner(ModelRunner):
         forward_batch: ForwardBatch | None,
         *,
         is_audio: bool = False,
-    ) -> list[torch.Tensor]:
+    ) -> "list[torch.Tensor] | ChannelLogitsList":
         logits_output = result.logits_output
         customized = logits_output.customized_info
         if isinstance(customized, dict):

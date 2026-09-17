@@ -45,7 +45,7 @@ from sglang_omni.platforms import current_platform
 logger = logging.getLogger(__name__)
 
 
-class ChannelLogitsList(list):
+class ChannelLogitsList(list[torch.Tensor | None]):
     """Per-channel logits; ``fused_audio`` carries the [B, n_vq, vocab] fp32
     tensor the audio entries are views of, so consumers can skip re-stacking."""
 
@@ -66,6 +66,8 @@ def _as_qwen3_config(config: Any) -> Any:
 
 class MossTTSDelaySGLangModel(torch.nn.Module):
     """MOSS-TTS Delay AR backbone with one text channel and N RVQ channels."""
+
+    _text_control_token_ids: torch.Tensor
 
     packed_modules_mapping = {
         "qkv_proj": ["q_proj", "k_proj", "v_proj"],
@@ -288,7 +290,7 @@ class MossTTSDelaySGLangModel(torch.nn.Module):
         omni_prefill_rids: list[str] | None = None,
         pp_proxy_tensors: Optional[PPProxyTensors] = None,
         input_embeds_are_projected: bool = False,
-    ) -> LogitsProcessorOutput:
+    ) -> LogitsProcessorOutput | PPProxyTensors:
         del omni_prefill_rids
         del input_embeds_are_projected
         if input_embeds is None:
@@ -408,7 +410,7 @@ class MossTTSDelaySGLangModel(torch.nn.Module):
             and self.pp_group.is_last_rank
         )
 
-    def _fused_audio_heads_eligible(self, weights: list[Any]) -> bool:
+    def _fused_audio_heads_eligible(self, weights: list[torch.Tensor | None]) -> bool:
         # Note (Jiaxin Deng): the fused path bypasses LogitsProcessor, so it is
         # gated to the plain configuration it reproduces: TP1, unquantized
         # same-shape ParallelLMHead weights, one audio vocab, no softcapping.
@@ -569,7 +571,7 @@ class MossTTSDelaySGLangModel(torch.nn.Module):
         forward_batch: ForwardBatch,
         *,
         is_audio: bool = False,
-    ) -> list[torch.Tensor]:
+    ) -> ChannelLogitsList:
         if self._fused_audio_heads_ready():
             logits_metadata = LogitsMetadata.from_forward_batch(forward_batch)
             logits_metadata.next_token_logits_buffer = None
