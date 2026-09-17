@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Protocol
 
 import torch
 
@@ -43,16 +43,6 @@ _PROGRESS_LOG_DIVISOR = 10
 _SAMPLING_NAMESPACE = "minimax-ttm-ar"
 _FORCED_CODES_DIR_ENV = "MINIMAX_MUSIC3_FORCED_CODES"
 _HIDDEN_DUMP_DIR_ENV = "MINIMAX_MUSIC3_HIDDEN_DUMP"
-
-
-class HiddenChunkMetadata(TypedDict):
-    stream: bool
-    modality: Literal["ttm_hidden"]
-    chunk_idx: int
-    start_frame: int
-    end_frame: int
-    is_final: bool
-    seed: int
 
 
 class MiniMaxMusic3Model(Protocol):
@@ -118,7 +108,7 @@ class MiniMaxMusic3ARState:
     generated_frames: int = 0
     finish_reason: str = "length"
     started_s: float = 0.0
-    pending_chunks: list[tuple[torch.Tensor, HiddenChunkMetadata]] = field(
+    pending_chunks: list[tuple[torch.Tensor, dict[str, str | int | bool]]] = field(
         default_factory=list
     )
 
