@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sglang.srt.layers.logits_processor import LogitsProcessorOutput
+from sglang.srt.layers.quantization.base_config import QuantizationConfig
 
 from sglang_omni.models.zonos2.components.text_frontend import TTSSamplingParams
 from sglang_omni.models.zonos2.hf_config import Zonos2Config
@@ -138,8 +139,11 @@ class Zonos2SonicRouter(nn.Module):
 
 class Zonos2MoEBlock(nn.Module):
     def __init__(
-        self, cfg: Zonos2Config, layer_id: int, quant_config: Optional[Any] = None
-    ):
+        self,
+        cfg: Zonos2Config,
+        layer_id: int,
+        quant_config: QuantizationConfig | None = None,
+    ) -> None:
         super().__init__()
         self.router = Zonos2SonicRouter(cfg, layer_id)
         self.experts = get_moe_impl_class(None)(
@@ -161,8 +165,11 @@ class Zonos2MoEBlock(nn.Module):
 
 class Zonos2DecoderLayer(nn.Module):
     def __init__(
-        self, cfg: Zonos2Config, layer_id: int, quant_config: Optional[Any] = None
-    ):
+        self,
+        cfg: Zonos2Config,
+        layer_id: int,
+        quant_config: QuantizationConfig | None = None,
+    ) -> None:
         super().__init__()
         self.eps = cfg.norm_eps
         self.attention = Zonos2Attention(cfg, layer_id)
@@ -204,7 +211,7 @@ class Zonos2SGLangModel(nn.Module):
     def __init__(
         self,
         config: Any,
-        quant_config: Optional[Any] = None,
+        quant_config: QuantizationConfig | None = None,
         prefix: str = "",
     ) -> None:
         super().__init__()

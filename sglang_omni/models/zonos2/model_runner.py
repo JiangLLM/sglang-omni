@@ -10,6 +10,7 @@ stays CUDA-graph-replayable (decode input_ids are row indices). No frame loop.
 
 from __future__ import annotations
 
+from queue import Queue
 from typing import Any
 
 import torch
@@ -21,13 +22,15 @@ from sglang_omni.models.zonos2.sampler import sample_tts
 from sglang_omni.models.zonos2.streaming_contract import (
     DEFAULT_ZONOS2_PRODUCER_FIRST_FLUSH_ROWS,
 )
+from sglang_omni.scheduling.messages import OutgoingMessage
+from sglang_omni.scheduling.sglang_backend.output_processor import SGLangOutputProcessor
 
 
 class Zonos2ModelRunner(ModelRunner):
     def __init__(
         self,
         tp_worker: Any,
-        output_processor: Any,
+        output_processor: SGLangOutputProcessor,
         *,
         compile_sampler: bool = False,
         frame_graph: bool = False,
@@ -36,9 +39,9 @@ class Zonos2ModelRunner(ModelRunner):
         stream_emit_first_chunk_frames: int = (
             DEFAULT_ZONOS2_PRODUCER_FIRST_FLUSH_ROWS
         ),
-    ):
+    ) -> None:
         super().__init__(tp_worker, output_processor)
-        self._outbox: Any | None = None
+        self._outbox: Queue[OutgoingMessage] | None = None
         # Streaming emission granularity: coalesce this many newly sampled frame
         # rows into a single [k, 9] outbox message instead of one put() per row.
         # The per-frame puts (~16/step at c=16) run on the resolve host loop and
@@ -73,7 +76,7 @@ class Zonos2ModelRunner(ModelRunner):
         # forward); also gates disable_overlap_schedule in sglang_stages.
         self._async_decode = async_decode
 
-    def set_stream_outbox(self, outbox: Any) -> None:
+    def set_stream_outbox(self, outbox: Queue[OutgoingMessage] | None) -> None:
         self._outbox = outbox
 
     # ---- FeedbackAR hooks: model-specific bodies live in callbacks.py ----
