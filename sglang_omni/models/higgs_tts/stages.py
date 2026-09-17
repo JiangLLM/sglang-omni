@@ -26,7 +26,7 @@ import logging
 import os
 import threading
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import torch
 import torchaudio.functional as F_audio
@@ -68,6 +68,9 @@ from sglang_omni.scheduling.speaker_cache import (
 )
 from sglang_omni.scheduling.stage_cache import StageOutputCache
 from sglang_omni.scheduling.threaded_simple_scheduler import ThreadedSimpleScheduler
+
+if TYPE_CHECKING:
+    from sglang_omni.scheduling.omni_scheduler import OmniScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +226,7 @@ def create_preprocessing_executor(
     num_codebooks: int = 8,
     codebook_size: int = 1026,
     max_concurrency: int = 16,
-):
+) -> ThreadedSimpleScheduler:
     """CPU stage: text tokenize + optional ref-audio file IO.
 
     Builds the full prompt + delays the codes when the client supplied
@@ -390,7 +393,7 @@ def create_audio_encoder_executor(
     gpu_id: int | None = None,
     dtype: str = "bfloat16",
     num_codebooks: int = 8,
-):
+) -> SimpleScheduler:
     """GPU stage: codec-encode raw ref audio → delayed codes + prompt assembly.
 
     No-op when preprocessing already produced ``reference_codes_delayed`` (the
@@ -490,7 +493,7 @@ def create_sglang_tts_engine_executor(
     prefill_coalesce_requests: int = 0,
     prefill_coalesce_wait_ms: float = 60.0,
     total_gpu_memory_fraction: float | None = None,
-):
+) -> "OmniScheduler":
     """sglang-backed AR engine for Higgs TTS."""
     from sglang_omni.models.higgs_tts.engine_builder import HiggsTtsEngineBuilder
 
@@ -529,7 +532,7 @@ def create_vocoder_executor(
     stream_holdback_tokens: int = 4,
     compile_decode: bool = False,
     decode_cuda_graph_frame_counts: tuple[int, ...] = (),
-):
+) -> HiggsStreamingVocoderScheduler:
     """Decode Higgs delayed codes to a mono 24 kHz waveform.
 
     Codec weights are extracted from the TTS checkpoint itself.

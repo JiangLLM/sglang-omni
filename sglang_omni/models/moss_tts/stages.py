@@ -10,7 +10,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 import torch
 from transformers import AutoConfig, AutoTokenizer
@@ -42,6 +42,9 @@ from sglang_omni.scheduling.reference_encoder import (
 )
 from sglang_omni.scheduling.simple_scheduler import SimpleScheduler
 from sglang_omni.utils.audio import audio_fingerprint, load_audio
+
+if TYPE_CHECKING:
+    from sglang_omni.scheduling.omni_scheduler import OmniScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -494,7 +497,7 @@ def create_sglang_tts_engine_executor(
     total_gpu_memory_fraction: float | None = None,
     process_total_gpu_memory_fraction: float | None = None,
     server_args_overrides: dict[str, Any] | None = None,
-) -> Any:
+) -> "OmniScheduler":
     overrides = dict(server_args_overrides or {})
     # Note (Jiaxin Deng): a declared stage fraction only reserves the card on paper, so
     # the AR engine has to be told about it or it profiles against the whole GPU and the
