@@ -6,6 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+from typing_extensions import NotRequired, TypedDict
+
 from sglang_omni.model_runner.base import ModelRunner
 
 if TYPE_CHECKING:
@@ -24,6 +26,23 @@ if TYPE_CHECKING:
         SchedulerOutput,
         SchedulerRequest,
     )
+
+
+MlxModelRunnerOptions = TypedDict(
+    "MlxModelRunnerOptions",
+    {
+        "model_path": str,
+        "trust_remote_code": bool,
+        "disable_radix_cache": bool,
+        "pool_size": NotRequired[int | None],
+        "mem_fraction_static": float,
+        "quantization": str | None,
+        "revision": str | None,
+        "enable_sampling": bool,
+        "sampling_rng_seed": int,
+        "deterministic_seeding": bool,
+    },
+)
 
 
 @dataclass(slots=True)
@@ -273,7 +292,7 @@ def create_mlx_model_worker(
                 raise RuntimeError(
                     "Fun-CosyVoice3 MLX worker requires its model bundle path"
                 )
-            init_kwargs = {
+            init_kwargs: MlxModelRunnerOptions = {
                 "model_path": mlx_model_path,
                 "trust_remote_code": get_model().trust_remote_code,
                 "disable_radix_cache": get_memory().disable_radix_cache,
