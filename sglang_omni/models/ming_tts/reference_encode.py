@@ -224,7 +224,7 @@ class MingTTSReferenceEncoder:
             )
         return waveform, speaker_waveform
 
-    def _pad_waveform(self, waveform: Any) -> Any:
+    def _pad_waveform(self, waveform: torch.Tensor) -> torch.Tensor:
         pad_align = int(1 / 12.5 * self.patch_size * self.sample_rate)
         new_len = (int(waveform.shape[-1]) + pad_align - 1) // pad_align * pad_align
         if new_len == int(waveform.shape[-1]):
