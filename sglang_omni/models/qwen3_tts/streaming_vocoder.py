@@ -1832,7 +1832,9 @@ class Qwen3TTSStreamingVocoderScheduler(
             for plan, row in zip(plans, waveform)
         ], waveform
 
-    def _runner_for_stream(self, stream: Any, initial: Any, worker_attr: str) -> Any:
+    def _runner_for_stream(
+        self, stream: torch.cuda.Stream | None, initial: Any, worker_attr: str
+    ) -> Any:
         """The graph runner that was built for this decode stream, if any."""
         if stream is self._decode_stream:
             return initial

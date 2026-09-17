@@ -58,7 +58,7 @@ class Zonos2ModelRunner(ModelRunner):
         # Side stream for the lagged resolve D2H: gated by a launch event so the
         # copy waits only for codes(N), not the next forward queued on the main
         # stream -> the host resolve overlaps forward(N+1).
-        self._copy_stream: Any | None = None
+        self._copy_stream: torch.cuda.Stream | None = None
         # Per-request sampler (preserves the ZH-CER fix): per-request
         # temperature/top_k/top_p/min_p/repetition_penalty, no requests[0]
         # broadcast. Opt-in torch.compile fuses its elementwise launches.

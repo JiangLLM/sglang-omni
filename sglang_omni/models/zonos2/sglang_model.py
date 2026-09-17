@@ -265,7 +265,7 @@ class Zonos2SGLangModel(nn.Module):
         # one replay per decode bucket, cutting host dispatch in the host-bound
         # decode loop. Built by capture_tail_graphs; empty -> eager runner path.
         self._tail_buckets: list[int] = []
-        self._tail_graphs: dict[int, Any] = {}
+        self._tail_graphs: dict[int, torch.cuda.CUDAGraph] = {}
         self._tail_params: Optional[TTSSamplingParams] = None
         self._tail_top_k_max: int = 0
         self._tail_any_top_p: bool = False
