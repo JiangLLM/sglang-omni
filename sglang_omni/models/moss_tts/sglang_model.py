@@ -816,7 +816,9 @@ class MossTTSDelaySGLangModel(torch.nn.Module):
         weight_loader = getattr(param, "weight_loader", default_weight_loader)
         weight_loader(param, loaded_weight)
 
-    def get_embed_and_head(self) -> tuple[list[Any], list[Any]]:
+    def get_embed_and_head(
+        self,
+    ) -> tuple[list[torch.Tensor | None], list[torch.Tensor | None]]:
         embed_weights = [
             getattr(layer, "weight", None) for layer in self.embedding_list
         ]
