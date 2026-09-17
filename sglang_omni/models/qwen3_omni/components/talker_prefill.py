@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from safetensors import safe_open
@@ -22,6 +22,10 @@ from sglang_omni.models.qwen3_omni.pending_text_queue import (
 )
 from sglang_omni.models.weight_loader import resolve_model_path
 from sglang_omni.proto import StagePayload
+
+if TYPE_CHECKING:
+    from sglang_omni.models.qwen3_omni.components.talker import Qwen3OmniTalker
+    from sglang_omni.scheduling.sglang_backend.request_data import SGLangARRequestData
 
 _THINKER_EMBED_CANDIDATE_KEYS = (
     "thinker.model.embed_tokens.weight",
@@ -133,7 +137,7 @@ class TalkerPrefillBuilder:
     def __init__(
         self,
         *,
-        model: Any,
+        model: "Qwen3OmniTalker",
         model_path: str,
         audio_token_id: int | None,
         image_token_id: int | None,
@@ -253,7 +257,7 @@ class TalkerPrefillBuilder:
             "prompt_model_inputs": prompt_model_inputs,
         }
 
-    def append_text_chunk(self, req_data: Any, chunk: Any) -> None:
+    def append_text_chunk(self, req_data: "SGLangARRequestData", chunk: Any) -> None:
         if req_data.thinker_chunks_done:
             return
 
@@ -268,7 +272,7 @@ class TalkerPrefillBuilder:
             req_data.pending_text_queue = pending_text_queue
         pending_text_queue.append(self.project_assistant_chunk(chunk))
 
-    def mark_thinker_done(self, req_data: Any) -> None:
+    def mark_thinker_done(self, req_data: "SGLangARRequestData") -> None:
         if req_data.thinker_chunks_done:
             return
 
